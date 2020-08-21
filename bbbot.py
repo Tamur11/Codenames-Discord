@@ -51,10 +51,29 @@ async def guess(ctx, word):
 
     # check if correct team guessing and guesses left > 0
     if codenames.get_turn() == team and codenames.get_guesses() != 0:
-        await ctx.send(codenames.player_guess(word, team))
-        codenames.set_guesses(int(codenames.get_guesses())-1)
-        await ctx.send("Clue is " + codenames.get_clue() + ". " +
-                       str(codenames.get_guesses()) + " guesses remaining.")
+        response = codenames.player_guess(word, team)
+        if codenames.is_game_over() is not None:
+            await ctx.send("Game Over! " + codenames.is_game_over() +
+                           ' wins! Type: "!codenames" to start a new game!')
+        await ctx.send(response)
+        # catch for typos
+        if 'try again' in response:
+            return
+        # if guess was correct
+        if response == 'Correct!':
+            # check if game should end
+            codenames.set_guesses(int(codenames.get_guesses())-1)
+            await ctx.send("Clue is " + codenames.get_clue() + ". " +
+                           str(codenames.get_guesses()) + " guesses remaining."
+                           )
+            if codenames.get_guesses() < 0:
+                codenames.swap_turn(codenames.get_turn())
+        # if guess was wrong
+        else:
+            if team == 'Red Team':
+                await ctx.send("Now Blue Spymaster's turn.")
+            elif team == 'Blue Team':
+                await ctx.send("Now Red Spymaster's turn.")
     else:
         await ctx.send("Not your team's turn.")
 
@@ -102,15 +121,25 @@ async def add_role(ctx, color, role):
 
     # check if player is spymaster
     if is_red_sm in user.roles or is_blue_sm in user.roles:
-        await ctx.send("Cannot join team as Spymaster.")
+        await ctx.send("Cannot join a team as Spymaster.")
         return
 
-    # add role
-    if team == 'Blue Team' or 'Red Team':
+    # add spymaster role
+    if team == 'Blue Spymaster' or team == 'Red Spymaster':
+        await user.add_roles(get(user.guild.roles, name=team))
+        await user.send("Your words: " +
+                        str(codenames.update_spymaster(team)))
+        await ctx.send("Joined " + team + ".")
+        return
+
+    # add team role
+    if team == 'Blue Team' or team == 'Red Team':
         await user.add_roles(get(user.guild.roles, name=team))
         await ctx.send("Joined " + team + ".")
-    else:
-        await ctx.send("Not a valid team.")
+        return
+
+    # catch typos
+    await ctx.send(team + " is not a valid team.")
 
 
 # leave team
@@ -137,9 +166,24 @@ async def remove_role(ctx, color, role):
 @bot.command(name='clue')
 @commands.has_any_role('Blue Spymaster', 'Red Spymaster')
 async def clue(ctx, word, number):
-    codenames.set_guesses(number)
+    user = ctx.message.author
+    is_red_sm = find(
+        lambda r: r.name == 'Red Spymaster', ctx.message.guild.roles)
+    is_blue_sm = find(
+        lambda r: r.name == 'Blue Spymaster', ctx.message.guild.roles)
+
+    if is_red_sm in user.roles:
+        spymaster_team = 'Red Team'
+    elif is_blue_sm in user.roles:
+        spymaster_team = 'Blue Team'
+
+    if codenames.get_turn() != spymaster_team:
+        await ctx.send("Not your team's turn.")
+        return
+    codenames.set_guesses(int(number)+1)
     codenames.set_clue(word)
-    await ctx.send("Clue is " + word + ". " + number + " guesses remaining.")
+    await ctx.send("Clue is " + word + ". " +
+                   str(codenames.get_guesses()) + " guesses remaining.")
 
 
 # pass
@@ -164,11 +208,24 @@ async def pass_turn(ctx):
         await ctx.send("Not your turn.")
 
 
+# display which team's turn
+@bot.command(name='turn')
+async def turn(ctx):
+    if codenames.get_clue() != '':
+        await ctx.send(codenames.get_turn() + "'s turn.")
+    elif codenames.get_clue() == '':
+        if codenames.get_turn() == 'Blue Team':
+            await ctx.send("Blue Spymaster's turn.")
+        elif codenames.get_turn() == 'Red Team':
+            await ctx.send("Red Spymaster's turn.")
+
 # command for testing
+
+
 @bot.command(name='give')
 async def test(ctx, word):
     if word == 'head':
-        await ctx.send('Shaheen is fascist.')    
+        await ctx.send('Shaheen is fascist.')
     else:
         await ctx.send('Shaheen is FASCIST I SAID.')
 
