@@ -10,9 +10,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 bot = commands.Bot(command_prefix='!')
 
+
 # create a game
-
-
 @bot.command(name='codenames')
 async def start(ctx):
     response = codenames.create_game()

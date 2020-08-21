@@ -1,11 +1,22 @@
 import random
-import json
 
 from itertools import repeat
 from random import randrange
 
 gameIsNotOver = True
 current_turn = 'Blue Team'
+
+game_state = {
+    'all': [],
+    'current_turn': [],
+    'Red Team': [],
+    'Blue Team': [],
+    'bystander': [],
+    'assassin': [],
+    'guessed': [],
+    'clue': '',
+    'guesses_remaining': 0
+}
 
 
 def create_game():
@@ -46,6 +57,8 @@ def create_game():
         chosen_word = use_words.pop(randrange(len(use_words)))
         bystander_words.append(chosen_word)
 
+    # fill game_state
+    global game_state
     game_state = {
         'all': all_words,
         'current_turn': current_turn,
@@ -58,13 +71,10 @@ def create_game():
         'guesses_remaining': 0
     }
 
-    update_game(game_state)
-
     return(all_words)
 
 
 def player_guess(word, team):
-    game_state = json.loads(open('data/current_game.txt').read())
     team_words = game_state[team]
     if team == 'Blue Team':
         not_words = game_state['Red Team']
@@ -82,69 +92,49 @@ def player_guess(word, team):
     # check if guess is bystander
     if word in game_state['bystander'] and word not in game_state['guessed']:
         game_state['guessed'].append(word)
-        update_game(game_state)
         return('bystander!')
 
     # check if guess is wrong team
     if word in not_words and word not in game_state['guessed']:
         game_state['guessed'].append(word)
-        update_game(game_state)
         return('wrong team!')
 
     # check if word is correct
     if word in team_words and word not in game_state['guessed']:
         game_state['guessed'].append(word)
-        update_game(game_state)
         return('correct!')
-
-
-# update game with modified game_state
-def update_game(game_state):
-    f = open("data/current_game.txt", "w")
-    f.write(json.dumps(game_state))
-    f.close()
 
 
 # update words to send to spymasters
 def update_spymaster(team):
-    game_state = json.loads(open('data/current_game.txt').read())
     return game_state[team]
 
 
 # get current team turn
 def get_turn():
-    game_state = json.loads(open('data/current_game.txt').read())
     return game_state['current_turn']
 
 
 # set current team turn
 def set_turn(current_turn):
-    game_state = json.loads(open('data/current_game.txt').read())
     game_state['current_turn'] = current_turn
-    update_game(game_state)
 
 
 # get number of remaining guesses
 def get_guesses():
-    game_state = json.loads(open('data/current_game.txt').read())
     return game_state['guesses_remaining']
 
 
 # set number of remaining guesses
 def set_guesses(guesses_remaining):
-    game_state = json.loads(open('data/current_game.txt').read())
     game_state['guesses_remaining'] = guesses_remaining
-    update_game(game_state)
 
 
 # get clue
 def get_clue():
-    game_state = json.loads(open('data/current_game.txt').read())
     return game_state['clue']
 
 
 # set clue
 def set_clue(clue):
-    game_state = json.loads(open('data/current_game.txt').read())
     game_state['clue'] = clue
-    update_game(game_state)
