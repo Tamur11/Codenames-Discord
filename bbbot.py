@@ -1,7 +1,8 @@
-from dotenv import load_dotenv
-from discord.utils import get, find
-from discord.ext import commands
 import os
+
+from discord.ext import commands
+from discord.utils import get, find
+from dotenv import load_dotenv
 
 from codenames import Codenames
 
@@ -14,21 +15,10 @@ bot = commands.Bot(command_prefix='!')
 # create a game
 @bot.command(name='codenames')
 async def start(ctx):
-    # create a game
+    # THIS NEEDS TO BE REPLACED AT SOME POINT
     global codenames
     codenames = Codenames()
-    await ctx.send('Codenames game has been created!')
     await ctx.send(codenames.get_word_list())
-
-
-async def color_tester(ctx):
-    is_red = find(lambda r: r.name == 'Red Team', ctx.message.guild.roles)
-    is_blue = find(lambda r: r.name == 'Blue Team', ctx.message.guild.roles)
-    is_red_sm = find(
-        lambda r: r.name == 'Red Spymaster', ctx.message.guild.roles)
-    is_blue_sm = find(
-        lambda r: r.name == 'Blue Spymaster', ctx.message.guild.roles)
-    return is_blue, is_blue_sm, is_red, is_red_sm
 
 
 # player guess
@@ -72,7 +62,7 @@ async def guess(ctx, word):
         # if guess was correct
         if response == 'Correct!':
             # check if game should end
-            codenames.set_guesses(int(codenames.get_guesses())-1)
+            codenames.set_guesses(int(codenames.get_guesses()) - 1)
             await ctx.send("Clue is " + codenames.get_clue() + ". " +
                            str(codenames.get_guesses()) + " guesses remaining."
                            )
@@ -102,6 +92,16 @@ async def guess(ctx, word):
     await spymaster.send(response)
 
 
+async def color_tester(ctx):
+    is_red = find(lambda r: r.name == 'Red Team', ctx.message.guild.roles)
+    is_blue = find(lambda r: r.name == 'Blue Team', ctx.message.guild.roles)
+    is_red_sm = find(
+        lambda r: r.name == 'Red Spymaster', ctx.message.guild.roles)
+    is_blue_sm = find(
+        lambda r: r.name == 'Blue Spymaster', ctx.message.guild.roles)
+    return is_blue, is_blue_sm, is_red, is_red_sm
+
+
 # assign roles
 @bot.command(name='join')
 async def add_role(ctx, color, role):
@@ -128,15 +128,25 @@ async def add_role(ctx, color, role):
 
     # check if player is spymaster
     if is_red_sm in user.roles or is_blue_sm in user.roles:
-        await ctx.send("Cannot join team as Spymaster.")
+        await ctx.send("Cannot join a team as Spymaster.")
         return
 
-    # add role
-    if team == 'Blue Team' or 'Red Team':
+    # add spymaster role
+    if team == 'Blue Spymaster' or team == 'Red Spymaster':
+        await user.add_roles(get(user.guild.roles, name=team))
+        await user.send("Your words: " +
+                        str(codenames.update_spymaster(team)))
+        await ctx.send("Joined " + team + ".")
+        return
+
+    # add team role
+    if team == 'Blue Team' or team == 'Red Team':
         await user.add_roles(get(user.guild.roles, name=team))
         await ctx.send("Joined " + team + ".")
-    else:
-        await ctx.send("Not a valid team.")
+        return
+
+    # catch typos
+    await ctx.send(team + " is not a valid team.")
 
 
 # leave team
@@ -163,9 +173,26 @@ async def remove_role(ctx, color, role):
 @bot.command(name='clue')
 @commands.has_any_role('Blue Spymaster', 'Red Spymaster')
 async def clue(ctx, word, number):
-    codenames.set_guesses(number)
+    user = ctx.message.author
+    is_red_sm = find(
+        lambda r: r.name == 'Red Spymaster', ctx.message.guild.roles)
+    is_blue_sm = find(
+        lambda r: r.name == 'Blue Spymaster', ctx.message.guild.roles)
+
+    if is_red_sm in user.roles:
+        spymaster_team = 'Red Team'
+    elif is_blue_sm in user.roles:
+        spymaster_team = 'Blue Team'
+    else:
+        spymaster_team = 'Error'
+
+    if codenames.get_turn() != spymaster_team:
+        await ctx.send("Not your team's turn.")
+        return
+    codenames.set_guesses(int(number) + 1)
     codenames.set_clue(word)
-    await ctx.send("Clue is " + word + ". " + number + " guesses remaining.")
+    await ctx.send("Clue is " + word + ". " +
+                   str(codenames.get_guesses()) + " guesses remaining.")
 
 
 # pass
@@ -182,7 +209,7 @@ async def pass_turn(ctx):
     elif is_blue in user.roles:
         team = 'Blue Team'
     else:
-        team = 'error'
+        team = 'Error'
 
     if codenames.get_turn() == team:
         codenames.set_clue("")
@@ -192,18 +219,27 @@ async def pass_turn(ctx):
         await ctx.send("Not your turn.")
 
 
+# display which team's turn
+@bot.command(name='turn')
+async def turn(ctx):
+    if codenames.get_clue() != '':
+        await ctx.send(codenames.get_turn() + "'s turn.")
+    elif codenames.get_clue() == '':
+        if codenames.get_turn() == 'Blue Team':
+            await ctx.send("Blue Spymaster's turn.")
+        elif codenames.get_turn() == 'Red Team':
+            await ctx.send("Red Spymaster's turn.")
+
+
 # command for testing
+
+
 @bot.command(name='give')
 async def test(ctx, word):
     if word == 'head':
         await ctx.send('Shaheen is fascist.')
     else:
         await ctx.send('Shaheen is FASCIST I SAID.')
-
-
-@bot.command(name='words')
-async def words(ctx):
-    await ctx.send(codenames.get_word_list())
 
 
 bot.run(TOKEN)
