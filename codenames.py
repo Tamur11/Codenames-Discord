@@ -2,167 +2,136 @@ import random
 
 from itertools import repeat
 from random import randrange
-
-game_state = {
-    'all': [],
-    'current_turn': '',
-    'Red Team': [],
-    'Blue Team': [],
-    'bystander': [],
-    'assassin': [],
-    'guessed': [],
-    'clue': '',
-    'guesses_remaining': 0
-}
+from dataclasses import dataclass
 
 
-def create_game():
-    word_list = open('data/words.txt').read().splitlines()
-    use_words = []
-    all_words = []
-
-    # select 25 random words to populate board
-    for i in repeat(0, 25):
-        chosen_word = word_list.pop(randrange(len(word_list)))
-        use_words.append(chosen_word)
-        all_words.append(chosen_word)
-
-    current_turn = 'Blue Team'
-    # determine who starts
-    if random.randint(1, 2) == 1:
-        num_red = 9
-        num_blue = 8
-        current_turn = 'Red Team'
-    else:
-        num_red = 8
-        num_blue = 9
-
-    red_words = []
-    blue_words = []
-    bystander_words = []
-
-    # allocate red, blue, bystander, assassin
-    for i in repeat(0, num_red):
-        chosen_word = use_words.pop(randrange(len(use_words)))
-        red_words.append(chosen_word)
-
-    for i in repeat(0, num_blue):
-        chosen_word = use_words.pop(randrange(len(use_words)))
-        blue_words.append(chosen_word)
-
-    for i in repeat(0, 7):
-        chosen_word = use_words.pop(randrange(len(use_words)))
-        bystander_words.append(chosen_word)
-
-    # fill game_state
-    global game_state
-    game_state = {
-        'all': all_words,
-        'current_turn': current_turn,
-        'Red Team': red_words,
-        'Blue Team': blue_words,
-        'bystander': bystander_words,
-        'assassin': use_words,
-        'guessed': [],
-        'clue': '',
-        'guesses_remaining': 0
-    }
-
-    return(all_words)
+@dataclass
+class Team:
+    color: str  # 'Red' or 'Blue'
+    words = []  # this teams words
+    guessed = []  # the words this team has guessed
+    clues = []  # the clues given to this team
+    score = 0  # this teams score
 
 
-def player_guess(word, team):
-    global game_state
-    team_words = game_state[team]
-    if team == 'Blue Team':
-        not_words = game_state['Red Team']
-    else:
-        not_words = game_state['Blue Team']
+class Codenames:
+    def __init__(self):
+        self.word_list = open('data/words.txt').read().splitlines()  # list of all known words
+        self.guessed = []  # list of words guessed by either team in this game
+        self.guesses_remaining = 0  # not sure what this is for but I'll leave it
+        self.clue = ''  # variable for holding the current clue ... THIS SHOULD BE IN THE TEAM CLASS
 
-    # make sure word is valid
-    if word not in game_state['all']:
-        return(word + ' is not in this game, try again.')
+        # select 25 random words to populate board
+        use_words = []  # temporary list of words being used in this game
+        self.all_words = []  # permanent list of all the words being used in this game
 
-    # check if guess is assassin
-    if word in game_state['assassin']:
-        game_state = {
-            'all': [],
-            'current_turn': '',
-            'Red Team': [],
-            'Blue Team': [],
-            'bystander': [],
-            'assassin': [],
-            'guessed': [],
-            'clue': '',
-            'guesses_remaining': 0
-        }
-        return("Assassin! " + team +
-               ' lost! Type: "!codenames" to start a new game!')
+        # select 25 random words to populate board
+        for _ in repeat(0, 25):
+            chosen_word = self.word_list.pop(randrange(len(self.word_list)))
+            use_words.append(chosen_word)
+            self.all_words.append(chosen_word)
 
-    # check if guess is bystander
-    if word in game_state['bystander'] and word not in game_state['guessed']:
-        game_state['guessed'].append(word)
-        swap_turn(get_turn())
-        return("That was a Bystander!")
+        # both teams start off with 8 cards
+        num_red = num_blue = 8
+        # randomly select one team to start and have one extra card
+        if random.randint(1, 2) == 1:
+            num_red += 1
+            self.current_turn = 'Red'
+        else:
+            num_blue += 1
+            self.current_turn = 'Blue'
 
-    # check if guess is wrong team
-    if word in not_words and word not in game_state['guessed']:
-        game_state['guessed'].append(word)
-        swap_turn(get_turn())
-        return("Wrong Team's Word!")
+        self.red_team = Team('Red')
+        self.blue_team = Team('Blue')
 
-    # check if word is correct
-    if word in team_words and word not in game_state['guessed']:
-        game_state['guessed'].append(word)
-        return('Correct!')
+        # allocate red, blue, assassin, and bystanders
+        for _ in repeat(None, num_red):
+            self.red_team.words.append(use_words.pop())
 
+        for _ in repeat(None, num_blue):
+            self.blue_team.guessed.append(use_words.pop())
 
-# check if game is over
-def is_game_over():
-    if all(elem in game_state['guessed'] for elem in game_state['Blue Team']):
-        return 'Blue Team'
-    if all(elem in game_state['guessed'] for elem in game_state['Red Team']):
-        return 'Red Team'
-    return
+        self.assassin = use_words.pop()
+        self.bystander_words = use_words  # 7 words left
 
+    def get_word_list(self):
+        return self.all_words
 
-# update words to send to spymasters
-def update_spymaster(team):
-    if team == 'Red Spymaster':
-        team = 'Red Team'
-    elif team == 'Blue Spymaster':
-        team = 'Blue Team'
-    return game_state[team]
+    def player_guess(self, word, team):
+        # recognize which team is guessing and who the opposing team is
+        if team == 'Red Team':
+            current_team = self.red_team
+            other_team = self.blue_team
+        else:
+            current_team = self.blue_team
+            other_team = self.red_team
 
+        # make sure word is valid
+        if word not in self.all_words:
+            return word + ' is not in this game, try again.'
 
-# get current team turn
-def get_turn():
-    return game_state['current_turn']
+        # check if guess is assassin
+        if word in self.assassin:
+            # CALL DESTRUCTOR AND DO END GAME THINGS
+            return ("Assassin! " + team +
+                    ' lost! Type: "!codenames" to start a new game!')
 
+        # check if guess is bystander
+        if word in self.bystander_words and word not in self.guessed:
+            self.guessed.append(word)
+            swap_turn()
+            return "That was a Bystander!"
 
-# set current team turn
-def swap_turn(current_turn):
-    if current_turn == 'Blue Team':
-        game_state['current_turn'] = 'Red Turn'
-    elif current_turn == 'Red Team':
-        game_state['current_turn'] = 'Blue Team'
+        # check if guess is wrong team
+        if word in other_team.words and word not in self.guessed:
+            self.guessed.append(word)
+            swap_turn()
+            return "Wrong Team's Word!"
 
+        # check if word is correct
+        if word in current_team.words and word not in self.guessed:
+            self.guessed.append(word)
+            return 'Correct!'
 
-# get number of remaining guesses
-def get_guesses():
-    return game_state['guesses_remaining']
+    # check if game is over
+    def is_game_over(self):
+        if all(elem in self.guessed for elem in self.blue_team.words):
+            return 'Blue Team'
+        if all(elem in self.guessed for elem in self.red_team.words):
+            return 'Red Team'
+        return
 
+    # update words to send to spymasters
+    def update_spymaster(self, team):
+        if team == 'Red Spymaster':
+            return self.red_team.words
+        elif team == 'Blue Spymaster':
+            return self.blue_team.words
+        return
 
-# set number of remaining guesses
-def set_guesses(guesses_remaining):
-    game_state['guesses_remaining'] = guesses_remaining
+    # get current team turn
+    def get_turn(self):
+        return self.current_turn
 
+    # set current team turn
+    def swap_turn(self):
+        if self.current_turn == 'Blue Team':
+            self.current_turn = 'Red Turn'
+        elif self.current_turn == 'Red Team':
+            self.current_turn = 'Blue Team'
 
-# get clue
-def get_clue():
-    return game_state['clue']
+    # get number of remaining guesses
+    def get_guesses(self):
+        return self.guesses_remaining
 
+    # set number of remaining guesses
+    def set_guesses(self, guesses_remaining):
+        self.guesses_remaining = guesses_remaining
 
-# set clue
-def set_clue(clue):
-    game_state['clue'] = clue
+    # get clue
+    def get_clue(self):
+        return self.clue
+
+    # set clue
+    def set_clue(self, clue):
+        self.clue = clue
