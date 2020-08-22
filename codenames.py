@@ -2,28 +2,28 @@ import random
 
 from itertools import repeat
 from random import randrange
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Team:
     color: str  # 'Red' or 'Blue'
-    words = []  # this teams words
-    guessed = []  # the words this team has guessed
-    clues = []  # the clues given to this team
-    score = 0  # this teams score
+    words: list = field(default_factory=list)  # this teams words
+    guessed: list = field(default_factory=list)  # this teams guessed words
+    clues: list = field(default_factory=list)  # the clues given to this team
+    score: int = 0  # this teams score
 
 
 class Codenames:
     def __init__(self):
-        self.word_list = open('data/words.txt').read().splitlines()  # list of all known words
-        self.guessed = []  # list of words guessed by either team in this game
-        self.guesses_remaining = 0  # not sure what this is for but I'll leave it
-        self.clue = ''  # variable for holding the current clue ... THIS SHOULD BE IN THE TEAM CLASS
+        self.word_list = open('data/words.txt').read().splitlines()  # words
+        self.guessed = []  # list of words guessed
+        self.guesses_remaining = 0
+        self.clue = ''  # current clue
 
         # select 25 random words to populate board
-        use_words = []  # temporary list of words being used in this game
-        self.all_words = []  # permanent list of all the words being used in this game
+        use_words = []  # temporary list of words being used
+        self.all_words = []  # permanent list of all the words being used
 
         # select 25 random words to populate board
         for _ in repeat(0, 25):
@@ -36,20 +36,20 @@ class Codenames:
         # randomly select one team to start and have one extra card
         if random.randint(1, 2) == 1:
             num_red += 1
-            self.current_turn = 'Red'
+            self.current_turn = 'Red Team'
         else:
             num_blue += 1
-            self.current_turn = 'Blue'
+            self.current_turn = 'Blue Team'
 
-        self.red_team = Team('Red')
-        self.blue_team = Team('Blue')
+        self.red_team = Team('Red Team')
+        self.blue_team = Team('Blue Team')
 
         # allocate red, blue, assassin, and bystanders
         for _ in repeat(None, num_red):
             self.red_team.words.append(use_words.pop())
 
         for _ in repeat(None, num_blue):
-            self.blue_team.guessed.append(use_words.pop())
+            self.blue_team.words.append(use_words.pop())
 
         self.assassin = use_words.pop()
         self.bystander_words = use_words  # 7 words left
@@ -79,13 +79,13 @@ class Codenames:
         # check if guess is bystander
         if word in self.bystander_words and word not in self.guessed:
             self.guessed.append(word)
-            swap_turn()
+            self.swap_turn()
             return "That was a Bystander!"
 
         # check if guess is wrong team
         if word in other_team.words and word not in self.guessed:
             self.guessed.append(word)
-            swap_turn()
+            self.swap_turn()
             return "Wrong Team's Word!"
 
         # check if word is correct
@@ -102,7 +102,7 @@ class Codenames:
         return
 
     # update words to send to spymasters
-    def update_spymaster(self, team):
+    def remaining_words(self, team):
         if team == 'Red Spymaster':
             return self.red_team.words
         elif team == 'Blue Spymaster':

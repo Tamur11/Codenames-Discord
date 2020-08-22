@@ -78,13 +78,17 @@ async def guess(ctx, word):
         await ctx.send("Not your team's turn.")
 
     # update spymaster logic
-    response = "Your remaining words: " + str(codenames.update_spymaster(team))
     if team == 'Red Team':
         to_check = is_red_sm
+        teams_spymaster = 'Red Spymaster'
     elif team == 'Blue Team':
         to_check = is_blue_sm
+        teams_spymaster = 'Blue Spymaster'
     else:
         to_check = 'Error'
+
+    response = "Your remaining words: " + str(
+        codenames.remaining_words(teams_spymaster))
 
     for member in ctx.guild.members:
         if to_check in member.roles:
@@ -135,7 +139,7 @@ async def add_role(ctx, color, role):
     if team == 'Blue Spymaster' or team == 'Red Spymaster':
         await user.add_roles(get(user.guild.roles, name=team))
         await user.send("Your words: " +
-                        str(codenames.update_spymaster(team)))
+                        str(codenames.remaining_words(team)))
         await ctx.send("Joined " + team + ".")
         return
 
@@ -213,6 +217,7 @@ async def pass_turn(ctx):
 
     if codenames.get_turn() == team:
         codenames.set_clue("")
+        codenames.swap_turn()
         codenames.set_guesses(0)
         await ctx.send(team + " has passed their turn.")
     else:
@@ -232,8 +237,6 @@ async def turn(ctx):
 
 
 # command for testing
-
-
 @bot.command(name='give')
 async def test(ctx, word):
     if word == 'head':
