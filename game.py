@@ -1,3 +1,6 @@
-class Game:
+from abc import ABC, abstractmethod
+
+
+class Game(ABC):
     def __init__(self):
-        test = None
+        self.players = []

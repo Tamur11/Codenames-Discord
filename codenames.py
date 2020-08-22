@@ -13,10 +13,12 @@ class Team:
     guessed: list = field(default_factory=list)  # this teams guessed words
     clues: list = field(default_factory=list)  # the clues given to this team
     score: int = 0  # this teams score
+    players: list = field(default_factory=list)  # the players on this team
 
 
 class Codenames(Game):
     def __init__(self):
+        super().__init__()
         self.word_list = open('data/words.txt').read().splitlines()  # words
         self.guessed = []  # list of words guessed
         self.guesses_remaining = 0
@@ -136,3 +138,10 @@ class Codenames(Game):
     # set clue
     def set_clue(self, clue):
         self.clue = clue
+
+    def add_player(self, name, team):
+        self.players.append(name)
+        if team == 'Blue Team':
+            self.blue_team.players.append(name)
+        elif team == 'Red Team':
+            self.red_team.players.append(name)

@@ -11,11 +11,11 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 bot = commands.Bot(command_prefix='!')
 
-current_game = Game  # variable to hold the current game being played
+current_game = Game()  # variable to hold the current game being played
 
 
 async def test_current_game(ctx, intended_game) -> bool:
-    if not current_game.__class__ == intended_game:
+    if current_game.__class__ == intended_game:
         return True
     else:
         await ctx.send(
@@ -27,6 +27,7 @@ async def test_current_game(ctx, intended_game) -> bool:
 @bot.command(name='codenames')
 async def start(ctx):
     # THIS NEEDS TO BE REPLACED AT SOME POINT
+    global current_game
     current_game = Codenames()
     await ctx.send(current_game.get_word_list())
 
@@ -78,9 +79,8 @@ async def guess(ctx, word):
             # check if game should end
             current_game.set_guesses(int(current_game.get_guesses()) - 1)
             await ctx.send("Clue is " + current_game.get_clue() + ". " +
-                           str(
-                               current_game.get_guesses()) + " guesses remaining."
-                           )
+                           str(current_game.get_guesses()) +
+                           " guesses remaining.")
             if current_game.get_guesses() < 0:
                 current_game.swap_turn()
         # if guess was wrong
@@ -169,6 +169,7 @@ async def add_role(ctx, color, role):
 
     # add team role
     if team == 'Blue Team' or team == 'Red Team':
+        current_game.add_player(ctx.message.author.name, team)
         await user.add_roles(get(user.guild.roles, name=team))
         await ctx.send("Joined " + team + ".")
         return
