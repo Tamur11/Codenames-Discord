@@ -1,8 +1,9 @@
 import random
-
+from dataclasses import dataclass, field
 from itertools import repeat
 from random import randrange
-from dataclasses import dataclass, field
+
+from game import Game
 
 
 @dataclass
@@ -14,7 +15,7 @@ class Team:
     score: int = 0  # this teams score
 
 
-class Codenames:
+class Codenames(Game):
     def __init__(self):
         self.word_list = open('data/words.txt').read().splitlines()  # words
         self.guessed = []  # list of words guessed
