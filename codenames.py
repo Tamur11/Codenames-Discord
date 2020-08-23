@@ -1,11 +1,12 @@
-import random
 from dataclasses import dataclass, field
 from itertools import repeat
-from random import randrange, shuffle
+from random import randrange, randint, shuffle
 
 from PIL import Image, ImageDraw, ImageFont
 
 from game import Game
+
+from data.words import default_data
 
 
 @dataclass
@@ -19,7 +20,7 @@ class Team:
 class Codenames(Game):
     def __init__(self):
         super().__init__()
-        self.word_list = open('data/words.txt').read().splitlines()  # words
+        self.word_list = default_data  # words
         self.guessed = []  # list of words guessed
         self.guesses_remaining = 0
         self.clue = ''  # current clue
@@ -37,7 +38,7 @@ class Codenames(Game):
         # both teams start off with 8 cards
         num_red = num_blue = 8
         # randomly select one team to start and have one extra card
-        if random.randint(1, 2) == 1:
+        if randint(1, 2) == 1:
             num_red += 1
             self.current_turn = 'Red Team'
         else:
@@ -50,13 +51,13 @@ class Codenames(Game):
         # allocate red, blue, assassin, and bystanders
         for _ in repeat(None, num_red):
             self.red_team.words.append(
-                use_words.pop(randrange(len(use_words))))
+                use_words.pop())
 
         for _ in repeat(None, num_blue):
             self.blue_team.words.append(
-                use_words.pop(randrange(len(use_words))))
+                use_words.pop())
 
-        self.assassin = use_words.pop(randrange(len(use_words)))
+        self.assassin = use_words.pop()
         self.bystander_words = use_words  # 7 words left
 
         shuffle(self.all_words)
@@ -156,7 +157,7 @@ class Codenames(Game):
         img = Image.new('RGB', (1600, 1000))
         draw = ImageDraw.Draw(img)
         count = 0
-        font = ImageFont.truetype('data/abeezee.otf', 48)
+        font = ImageFont.truetype('data/abeezee.otf', 42)
 
         for i in range(0, 5):
             for j in range(0, 5):

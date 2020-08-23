@@ -177,8 +177,7 @@ async def add_role(ctx, color, role):
     # add spymaster role
     if team == 'Blue Spymaster' or team == 'Red Spymaster':
         await user.add_roles(get(user.guild.roles, name=team))
-        await user.send("Your words: " +
-                        str(current_game.remaining_words(team)))
+        await send_image(user, team)
         await ctx.send("Joined " + team + ".")
         return
 
