@@ -13,8 +13,6 @@ class Team:
     color: str  # 'Red' or 'Blue'
     words: list = field(default_factory=list)  # this teams words
     guessed: list = field(default_factory=list)  # this teams guessed words
-    clues: list = field(default_factory=list)  # the clues given to this team
-    score: int = 0  # this teams score
     players: list = field(default_factory=list)  # the players on this team
 
 
@@ -51,12 +49,14 @@ class Codenames(Game):
 
         # allocate red, blue, assassin, and bystanders
         for _ in repeat(None, num_red):
-            self.red_team.words.append(use_words.pop())
+            self.red_team.words.append(
+                use_words.pop(randrange(len(use_words))))
 
         for _ in repeat(None, num_blue):
-            self.blue_team.words.append(use_words.pop())
+            self.blue_team.words.append(
+                use_words.pop(randrange(len(use_words))))
 
-        self.assassin = use_words.pop()
+        self.assassin = use_words.pop(randrange(len(use_words)))
         self.bystander_words = use_words  # 7 words left
 
     def get_word_list(self):
@@ -123,7 +123,7 @@ class Codenames(Game):
     # set current team turn
     def swap_turn(self):
         if self.current_turn == 'Blue Team':
-            self.current_turn = 'Red Turn'
+            self.current_turn = 'Red Team'
         elif self.current_turn == 'Red Team':
             self.current_turn = 'Blue Team'
 
@@ -150,39 +150,53 @@ class Codenames(Game):
         elif team == 'Red Team':
             self.red_team.players.append(name)
 
-    def update_image_state(self):
+    def update_image_state(self, spymaster_color):
         img = Image.new('RGB', (1600, 1000))
         draw = ImageDraw.Draw(img)
-        all_words = self.all_words
-        reds = self.red_team.words
-        blues = self.blue_team.words
-        bystander = self.bystander_words
-        ass = self.assassin
-        guessed = self.guessed
         count = 0
-        font = ImageFont.truetype('data/abeezee.otf', 28)
+        font = ImageFont.truetype('data/abeezee.otf', 48)
+
         for i in range(0, 5):
             for j in range(0, 5):
                 color = None
-                current_word = all_words[count]
-                if current_word in guessed:
-                    if current_word in reds:
-                        color = (242, 96, 80)
-                    elif current_word in blues:
-                        color = (133, 204, 255)
-                    elif current_word in bystander:
-                        color = (209, 195, 67)
-                    elif current_word in ass:
-                        color = (161, 158, 137)
+                current_word = self.all_words[count]
+
+                # partial image for guessers
+                if spymaster_color is None:
+                    if current_word in self.guessed:
+                        if current_word in self.red_team.words:
+                            color = (242, 96, 80)
+                        elif current_word in self.blue_team.words:
+                            color = (133, 204, 255)
+                        elif current_word in self.bystander_words:
+                            color = (209, 195, 67)
+                        elif current_word in self.assassin:
+                            color = (161, 158, 137)
+                    else:
+                        color = (255, 255, 255)
+
+                # full image for spymasters
                 else:
-                    color = (255, 255, 255)
+                    if current_word in self.red_team.words:
+                        color = (242, 96, 80)
+                    elif current_word in self.blue_team.words:
+                        color = (133, 204, 255)
+                    elif current_word in self.bystander_words:
+                        color = (209, 195, 67)
+                    elif current_word in self.assassin:
+                        color = (161, 158, 137)
+                    # highlight guessed words green
+                    if current_word in self.guessed:
+                        color = (134, 249, 107)
+
                 startX = 320 * j
                 startY = 200 * i
                 endX = 320 * j + 320
                 endY = 200 * i + 200
-                draw.rectangle([(startX, startY), (endX, endY)], color, (0, 0, 0))
+                draw.rectangle(
+                    [(startX, startY), (endX, endY)], color, (0, 0, 0))
                 w, h = draw.textsize(current_word, font)
-                draw.text((startX + (320 - w) / 2, startY + (200 - h) / 2), current_word, (0, 0, 0), font)
+                draw.text((startX + (320 - w) / 2, startY + (200 - h) / 2),
+                          current_word, (0, 0, 0), font)
                 count += 1
         return img
-
