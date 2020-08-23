@@ -1,7 +1,7 @@
 import random
 from dataclasses import dataclass, field
 from itertools import repeat
-from random import randrange
+from random import randrange, shuffle
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -58,6 +58,8 @@ class Codenames(Game):
 
         self.assassin = use_words.pop()
         self.bystander_words = use_words  # 7 words left
+
+        shuffle(self.all_words)
 
     def get_word_list(self):
         return self.all_words
