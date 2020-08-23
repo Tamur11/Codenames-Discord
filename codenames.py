@@ -90,19 +90,21 @@ class Codenames(Game):
         # check if guess is wrong team
         if word in other_team.words and word not in self.guessed:
             self.guessed.append(word)
+            other_team.words.remove(word)
             self.swap_turn()
             return "Wrong Team's Word!"
 
         # check if word is correct
         if word in current_team.words and word not in self.guessed:
             self.guessed.append(word)
+            current_team.words.remove(word)
             return 'Correct!'
 
     # check if game is over
     def is_game_over(self):
-        if all(elem in self.guessed for elem in self.blue_team.words):
+        if not self.blue_team.words:
             return 'Blue Team'
-        if all(elem in self.guessed for elem in self.red_team.words):
+        if not self.red_team.words:
             return 'Red Team'
         return
 
