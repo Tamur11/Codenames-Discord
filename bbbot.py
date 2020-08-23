@@ -1,5 +1,7 @@
 import os
+from io import BytesIO
 
+import discord
 from discord.ext import commands
 from discord.utils import get, find
 from dotenv import load_dotenv
@@ -23,6 +25,13 @@ async def test_current_game(ctx, intended_game) -> bool:
         return False
 
 
+async def send_image(ctx):
+    with BytesIO() as image_bin:
+        current_game.update_image_state().save(image_bin, 'PNG')
+        image_bin.seek(0)
+        await ctx.send(file=discord.File(fp=image_bin, filename='shaheensmallpp.png'))
+
+
 # create a game
 @bot.command(name='codenames')
 async def start(ctx):
@@ -30,6 +39,7 @@ async def start(ctx):
     global current_game
     current_game = Codenames()
     await ctx.send(current_game.get_word_list())
+    await send_image(ctx)
 
 
 # player guess
@@ -110,6 +120,7 @@ async def guess(ctx, word):
         if to_check in member.roles:
             spymaster = member
     await spymaster.send(response)
+    await send_image(ctx)
 
 
 async def color_tester(ctx):

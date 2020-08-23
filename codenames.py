@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from itertools import repeat
 from random import randrange
 
+from PIL import Image, ImageDraw, ImageFont
+
 from game import Game
 
 
@@ -145,3 +147,40 @@ class Codenames(Game):
             self.blue_team.players.append(name)
         elif team == 'Red Team':
             self.red_team.players.append(name)
+
+    def update_image_state(self):
+        img = Image.new('RGB', (1600, 1000))
+        draw = ImageDraw.Draw(img)
+        all_words = self.all_words
+        reds = self.red_team.words
+        blues = self.blue_team.words
+        bystander = self.bystander_words
+        ass = self.assassin
+        guessed = self.guessed
+        count = 0
+        font = ImageFont.truetype('data/abeezee.otf', 28)
+        for i in range(0, 5):
+            for j in range(0, 5):
+                color = None
+                current_word = all_words[count]
+                if current_word in guessed:
+                    if current_word in reds:
+                        color = (242, 96, 80)
+                    elif current_word in blues:
+                        color = (133, 204, 255)
+                    elif current_word in bystander:
+                        color = (209, 195, 67)
+                    elif current_word in ass:
+                        color = (161, 158, 137)
+                else:
+                    color = (255, 255, 255)
+                startX = 320 * j
+                startY = 200 * i
+                endX = 320 * j + 320
+                endY = 200 * i + 200
+                draw.rectangle([(startX, startY), (endX, endY)], color, (0, 0, 0))
+                w, h = draw.textsize(current_word, font)
+                draw.text((startX + (320 - w) / 2, startY + (200 - h) / 2), current_word, (0, 0, 0), font)
+                count += 1
+        return img
+
