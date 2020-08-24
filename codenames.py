@@ -31,7 +31,8 @@ class Codenames(Game):
 
         # select 25 random words to populate board
         for _ in repeat(0, 25):
-            chosen_word = self.word_list.pop(randrange(len(self.word_list)))
+            chosen_word = self.word_list.pop(
+                randrange(len(self.word_list)))
             use_words.append(chosen_word)
             self.all_words.append(chosen_word)
 

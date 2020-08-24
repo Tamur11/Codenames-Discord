@@ -25,26 +25,6 @@ async def test_current_game(ctx, intended_game) -> bool:
         return False
 
 
-async def send_image(target, spymaster_color):
-    with BytesIO() as image_bin:
-        current_game.update_image_state(spymaster_color).save(image_bin, 'PNG')
-        image_bin.seek(0)
-
-        b_remain = str(len(current_game.remaining_words('Blue Spymaster')))
-        r_remain = str(len(current_game.remaining_words('Red Spymaster')))
-        # embed logic
-        description = "```ini\n[" + b_remain + "]```" + \
-            "```css\n[" + r_remain + "]```"
-        if current_game.get_turn() == 'Red Team':
-            color = discord.Colour.red()
-        elif current_game.get_turn() == 'Blue Team':
-            color = discord.Colour.blue()
-        embed = discord.Embed(description=description, color=color)
-        file = discord.File(fp=image_bin, filename='wordlist.png')
-        embed.set_image(url="attachment://wordlist.png")
-        await target.send(file=file, embed=embed)
-
-
 # create a game
 @bot.command(name='codenames')
 async def start(ctx):
@@ -92,23 +72,29 @@ async def guess(ctx, word):
 
     # check if correct team guessing and guesses left > 0
     if current_game.get_turn() == team and current_game.get_guesses() != 0:
-        response = current_game.player_guess(word.title(), team)
+        response = current_game.player_guess(word.upper(), team)
+        await ctx.send(response)
         if current_game.is_game_over() is not None:
             await ctx.send("Game Over! " + current_game.is_game_over() +
                            ' wins! Type: "!codenames" to start a new game!')
+            await clear_roles(ctx)
             current_game = Game()  # reset game
-        await ctx.send(response)
         # catch for typos
         if 'try again' in response:
             return
         # if guess was correct
         if response == 'Correct!':
             # check if game should end
-            current_game.set_guesses(int(current_game.get_guesses()) - 1)
-            await ctx.send("Clue is " + current_game.get_clue() + ". " +
-                           str(current_game.get_guesses()) +
-                           " guesses remaining.")
-            if current_game.get_guesses() < 0:
+            if int(current_game.get_guesses()) != -2:
+                current_game.set_guesses(int(current_game.get_guesses()) - 1)
+                await ctx.send("Clue is " + current_game.get_clue() + ". " +
+                               str(current_game.get_guesses()) +
+                               " guesses remaining.")
+            else:
+                await ctx.send(
+                    "Clue is " + current_game.get_clue() + ". " +
+                    "You have infinite guesses remaining!")
+            if current_game.get_guesses() == 0:
                 current_game.swap_turn()
                 await spymaster_words(ctx, current_game.get_turn())
         # if guess was wrong
@@ -121,6 +107,7 @@ async def guess(ctx, word):
                 await spymaster_words(ctx, current_game.get_turn())
         # if assassin
         else:
+            await clear_roles(ctx)
             current_game = Game()  # reset game
             return
     else:
@@ -142,7 +129,7 @@ async def color_tester(ctx):
 
 
 # assign roles
-@bot.command(name='join')
+@ bot.command(name='join')
 async def add_role(ctx, color, role):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
@@ -193,7 +180,7 @@ async def add_role(ctx, color, role):
 
 
 # leave team
-@bot.command(name='leave')
+@ bot.command(name='leave')
 async def remove_role(ctx, color, role):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
@@ -217,11 +204,15 @@ async def remove_role(ctx, color, role):
 
 
 # give clue
-@bot.command(name='clue')
-@commands.has_any_role('Blue Spymaster', 'Red Spymaster')
+@ bot.command(name='clue')
+@ commands.has_any_role('Blue Spymaster', 'Red Spymaster')
 async def clue(ctx, word, number):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
+        return
+
+    if int(number) < 0:
+        await ctx.send("Number must be non-negative.")
         return
 
     user = ctx.message.author
@@ -240,15 +231,21 @@ async def clue(ctx, word, number):
     if current_game.get_turn() != spymaster_team:
         await ctx.send("Not your team's turn.")
         return
-    current_game.set_guesses(int(number) + 1)
+    if number == '0' or '00':
+        current_game.set_guesses(-2)
+    else:
+        current_game.set_guesses(int(number) + 1)
     current_game.set_clue(word)
-    await ctx.send("Clue is " + word + ". " +
-                   str(current_game.get_guesses()) + " guesses remaining.")
+    if current_game.get_guesses() == -2:
+        guess_str = "You have infinite guesses remaining!"
+    else:
+        guess_str = str(current_game.get_guesses()) + " guesses remaining."
+    await ctx.send("Clue is " + word + ". " + guess_str)
 
 
 # pass
-@bot.command(name='pass')
-@commands.has_any_role('Blue Team', 'Red Team')
+@ bot.command(name='pass')
+@ commands.has_any_role('Blue Team', 'Red Team')
 async def pass_turn(ctx):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
@@ -277,7 +274,7 @@ async def pass_turn(ctx):
 
 
 # display which team's turn
-@bot.command(name='turn')
+@ bot.command(name='turn')
 async def turn(ctx):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
@@ -290,6 +287,26 @@ async def turn(ctx):
             await ctx.send("Blue Spymaster's turn.")
         elif current_game.get_turn() == 'Red Team':
             await ctx.send("Red Spymaster's turn.")
+
+
+async def send_image(target, spymaster_color):
+    with BytesIO() as image_bin:
+        current_game.update_image_state(spymaster_color).save(image_bin, 'PNG')
+        image_bin.seek(0)
+
+        b_remain = str(len(current_game.remaining_words('Blue Spymaster')))
+        r_remain = str(len(current_game.remaining_words('Red Spymaster')))
+        # embed logic
+        description = "```ini\n[" + b_remain + " words remain]```" + \
+            "```css\n[" + r_remain + " words remain]```"
+        if current_game.get_turn() == 'Red Team':
+            color = discord.Colour.red()
+        elif current_game.get_turn() == 'Blue Team':
+            color = discord.Colour.blue()
+        embed = discord.Embed(description=description, color=color)
+        file = discord.File(fp=image_bin, filename='wordlist.png')
+        embed.set_image(url="attachment://wordlist.png")
+        await target.send(file=file, embed=embed)
 
 
 # send words to spymaster
@@ -314,5 +331,18 @@ async def spymaster_words(ctx, team):
         await send_image(spymaster, team)
     else:
         return
+
+
+# function to clear roles post game
+async def clear_roles(ctx):
+    role_list = [
+        'Blue Spymaster',
+        'Red Spymaster',
+        'Blue Team',
+        'Red Team'
+    ]
+    for member in ctx.guild.members:
+        for role in role_list:
+            await member.remove_roles(get(member.guild.roles, name=role))
 
 bot.run(TOKEN)
