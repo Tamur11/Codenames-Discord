@@ -6,7 +6,9 @@ from discord.ext import commands
 from discord.utils import get, find
 from dotenv import load_dotenv
 
-from codenames import Codenames, Game
+from game import Game
+from codenames import Codenames
+from werewolf import Werewolf
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -21,13 +23,114 @@ async def test_current_game(ctx, intended_game) -> bool:
         return True
     else:
         await ctx.send(
-            'We are not playing ' + intended_game.__name__ + ' right now.')
+            'Command not availible during ' + intended_game.__name__ + '.')
         return False
 
 
-# create a game
-@bot.command(name='codenames')
+# create a werewolf game
+@bot.command(name='werewolf')
+async def werewolf(ctx):
+    global current_game
+    current_game = Werewolf()
+
+    await ctx.send("One Night Ultimate Werewolf game started!")
+
+# werewolf add role card
+
+
+@bot.command(name='add')
+async def add_role(ctx, role):
+    valid_roles = [
+        'villager',  # up to 3
+        'werewolf',  # up to 2
+        'seer',
+        'robber',
+        'troublemaker',
+        'tanner',
+        'drunk',
+        'hunter',
+        'mason',  # always add 2
+        'insomniac',
+        'minion',
+        'doppelganger'
+    ]
+
+    if role != 'villager' and role != 'werewolf' and role != 'mason' and\
+            role in current_game.get_role_list():
+        await ctx.send(role.title() + " has already been added.")
+        return
+    elif role != 'villager' and current_game.get_role_list().count(role) >= 2:
+        await ctx.send("Already have 2 " + role + " added.")
+        return
+    elif current_game.get_role_list().count(role) >= 3:
+        await ctx.send("Already have 3 villagers added.")
+        return
+
+    if role.lower() in valid_roles:
+        if role == 'mason':
+            current_game.add_role(role)
+            current_game.add_role(role)
+        else:
+            current_game.add_role(role)
+
+        role_list_str = ''
+        dupe = []
+        for role in current_game.get_role_list():
+            if current_game.get_role_list().count(role) > 1 and\
+                    role not in dupe:
+                role_list_str += role.title() + ' (' +\
+                    str(current_game.get_role_list().count(role)) + ')\n'
+                dupe.append(role)
+            elif role not in dupe:
+                role_list_str += role.title() + '\n'
+        await ctx.send("Added " + role +
+                       " to current Werewolf game.\nCurrent roster:\n" +
+                       role_list_str)
+
+        # check how many roles remaining
+        diff = len(current_game.get_role_list())-3 -\
+            len(current_game.get_players())
+        if diff == 0:
+            await ctx.send("Good to go! Type !start to begin the night...")
+        elif diff > 0:
+            await ctx.send(str(diff) + " too many roles.")
+        else:
+            await ctx.send("Need " + str(abs(diff)) + " more roles.")
+
+
+# start a werewolf game
+@bot.command(name='start')
 async def start(ctx):
+    # check if at least 3 players
+    if len(current_game.get_players()) < 3:
+        current_players = "Current players:\n"
+        for user in current_game.get_players():
+            current_players += user.display_name + '\n'
+        await ctx.send(
+            "Must have at least 3 players to begin. Current players are:\n" +
+            current_players)
+        return
+
+    # check if werewolf has been added
+    if 'werewolf' not in current_game.get_role_list():
+        await ctx.send("Must have at least one werewolf to begin.")
+        return
+
+    diff = len(current_game.get_role_list())-3 -\
+        len(current_game.get_players())
+
+    if diff == 0:
+        # ADD START GAME LOGIC
+        await ctx.send("The night has begun...")
+    elif diff > 0:
+        await ctx.send(str(diff) + " too many roles.")
+    else:
+        await ctx.send("Need " + str(abs(diff)) + " more roles.")
+
+
+# create a codenames game
+@bot.command(name='codenames')
+async def codenames(ctx):
     global current_game
     current_game = Codenames()
 
@@ -85,15 +188,20 @@ async def guess(ctx, word):
         # if guess was correct
         if response == 'Correct!':
             # check if game should end
-            if int(current_game.get_guesses()) != -2:
+            if int(current_game.get_guesses()) == -2:
+                await ctx.send(
+                    "Your words are not related to " +
+                    current_game.get_clue() +
+                    ". You have infinite guesses remaining!")
+            elif int(current_game.get_guesses()) == -3:
+                await ctx.send(
+                    "Clue is " + current_game.get_clue() +
+                    ". You have infinite guesses remaining!")
+            else:
                 current_game.set_guesses(int(current_game.get_guesses()) - 1)
                 await ctx.send("Clue is " + current_game.get_clue() + ". " +
                                str(current_game.get_guesses()) +
                                " guesses remaining.")
-            else:
-                await ctx.send(
-                    "Clue is " + current_game.get_clue() + ". " +
-                    "You have infinite guesses remaining!")
             if current_game.get_guesses() == 0:
                 current_game.swap_turn()
                 await spymaster_words(ctx, current_game.get_turn())
@@ -130,53 +238,72 @@ async def color_tester(ctx):
 
 # assign roles
 @ bot.command(name='join')
-async def add_role(ctx, color, role):
-    # test to see if we are currently in a Codenames game
-    if not await test_current_game(ctx, Codenames):
-        return
-
-    team = color.title() + " " + role.title()
+async def join(ctx, *args):
     user = ctx.message.author
-    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
 
-    # ensure one spymaster per color
-    if role == "Spymaster":
-        for member in ctx.guild.members:
-            if color == 'Blue':
-                if is_blue_sm in member.roles:
-                    await ctx.send("There is a spymaster of that color.")
-                    return
-            elif color == 'Red':
-                if is_red_sm in member.roles:
-                    await ctx.send("There is a spymaster of that color.")
-                    return
+    # werewolf game check
+    if not args and await test_current_game(ctx, Werewolf):
+        if user not in current_game.get_players():
+            current_game.add_players(user)
+        else:
+            await ctx.send("Already in game lobby.")
+            return
 
-    # check if player is already on a team
-    if is_red in user.roles or is_blue in user.roles:
-        await ctx.send("Already on a team.")
+        response = "Current players:\n"
+        for user in current_game.get_players():
+            response += user.display_name + '\n'
+        await ctx.send(response)
+        await ctx.send("Please add " +
+                       str(len(current_game.get_players())+3) + " roles.")
+
+    # codenames check
+    elif await test_current_game(ctx, Codenames):
+        color = args[0]
+        role = args[1]
+        team = color.title() + " " + role.title()
+
+        is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
+
+        # ensure one spymaster per color
+        if role == "Spymaster":
+            for member in ctx.guild.members:
+                if color == 'Blue':
+                    if is_blue_sm in member.roles:
+                        await ctx.send("There is a spymaster of that color.")
+                        return
+                elif color == 'Red':
+                    if is_red_sm in member.roles:
+                        await ctx.send("There is a spymaster of that color.")
+                        return
+
+        # check if player is already on a team
+        if is_red in user.roles or is_blue in user.roles:
+            await ctx.send("Already on a team.")
+            return
+
+        # check if player is spymaster
+        if is_red_sm in user.roles or is_blue_sm in user.roles:
+            await ctx.send("Cannot join a team as Spymaster.")
+            return
+
+        # add spymaster role
+        if team == 'Blue Spymaster' or team == 'Red Spymaster':
+            await user.add_roles(get(user.guild.roles, name=team))
+            await send_image(user, team)
+            await ctx.send("Joined " + team + ".")
+            return
+
+        # add team role
+        if team == 'Blue Team' or team == 'Red Team':
+            current_game.add_player(ctx.message.author.name, team)
+            await user.add_roles(get(user.guild.roles, name=team))
+            await ctx.send("Joined " + team + ".")
+            return
+
+        # catch typos
+        await ctx.send(team + " is not a valid team.")
+    else:
         return
-
-    # check if player is spymaster
-    if is_red_sm in user.roles or is_blue_sm in user.roles:
-        await ctx.send("Cannot join a team as Spymaster.")
-        return
-
-    # add spymaster role
-    if team == 'Blue Spymaster' or team == 'Red Spymaster':
-        await user.add_roles(get(user.guild.roles, name=team))
-        await send_image(user, team)
-        await ctx.send("Joined " + team + ".")
-        return
-
-    # add team role
-    if team == 'Blue Team' or team == 'Red Team':
-        current_game.add_player(ctx.message.author.name, team)
-        await user.add_roles(get(user.guild.roles, name=team))
-        await ctx.send("Joined " + team + ".")
-        return
-
-    # catch typos
-    await ctx.send(team + " is not a valid team.")
 
 
 # leave team
@@ -231,16 +358,23 @@ async def clue(ctx, word, number):
     if current_game.get_turn() != spymaster_team:
         await ctx.send("Not your team's turn.")
         return
-    if number == '0' or '00':
+    if number == '0':
         current_game.set_guesses(-2)
+    elif number == '00':
+        current_game.set_guesses(-3)
     else:
         current_game.set_guesses(int(number) + 1)
     current_game.set_clue(word)
     if current_game.get_guesses() == -2:
-        guess_str = "You have infinite guesses remaining!"
+        response = "Your words are not related to " + word +\
+            ". You have infinite guesses remaining!"
+    elif current_game.get_guesses() == -3:
+        response = "Clue is " + word +\
+            ". You have infinite guesses remaining!"
     else:
-        guess_str = str(current_game.get_guesses()) + " guesses remaining."
-    await ctx.send("Clue is " + word + ". " + guess_str)
+        response = "Clue is " + word + ". " +\
+            str(current_game.get_guesses()) + " guesses remaining."
+    await ctx.send(response)
 
 
 # pass
