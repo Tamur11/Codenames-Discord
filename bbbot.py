@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord.utils import get, find
 from dotenv import load_dotenv
 
-from game import Game
+from games.game import Game
 from games.codenames import Codenames
 from games.werewolf import Werewolf
 
@@ -88,44 +88,54 @@ async def add_role(ctx, role):
                        role_list_str)
 
         # check how many roles remaining
-        diff = len(current_game.get_role_list())-3 -\
-            len(current_game.get_players())
-        if diff == 0:
-            await ctx.send("Good to go! Type !start to begin the night...")
-        elif diff > 0:
-            await ctx.send(str(diff) + " too many roles.")
-        else:
-            await ctx.send("Need " + str(abs(diff)) + " more roles.")
+        await roles_remain(ctx)
 
 
 # start a werewolf game
 @bot.command(name='start')
 async def start(ctx):
     # check if at least 3 players
-    if len(current_game.get_players()) < 3:
-        current_players = "Current players:\n"
-        for user in current_game.get_players():
-            current_players += user.display_name + '\n'
-        await ctx.send(
-            "Must have at least 3 players to begin. Current players are:\n" +
-            current_players)
-        return
+    # if len(current_game.get_players()) < 3:
+    #     current_players = "Current players:\n"
+    #     for user in current_game.get_players():
+    #         current_players += user.display_name + '\n'
+    #     await ctx.send(
+    #         "Must have at least 3 players to begin. Current players are:\n" +
+    #         current_players)
+    #     return
 
     # check if werewolf has been added
     if 'werewolf' not in current_game.get_role_list():
         await ctx.send("Must have at least one werewolf to begin.")
         return
 
+    # check how many roles remaining
+    await roles_remain(ctx)
+
+    # run night logic
+    await night_logic(ctx)
+
+
+# roles to add/remove before can start
+async def roles_remain(ctx):
     diff = len(current_game.get_role_list())-3 -\
         len(current_game.get_players())
-
     if diff == 0:
-        # ADD START GAME LOGIC
-        await ctx.send("The night has begun...")
+        await ctx.send("Good to go! Type !start to begin the night...")
+        return
     elif diff > 0:
         await ctx.send(str(diff) + " too many roles.")
+        return
     else:
         await ctx.send("Need " + str(abs(diff)) + " more roles.")
+        return
+
+
+# run the night logic part of the game
+async def night_logic(ctx):
+    current_game.assign_roles()
+    await ctx.send("The most pythonic line ever returns: " +
+                   str(current_game.get_players()))
 
 
 # create a codenames game
@@ -178,6 +188,7 @@ async def guess(ctx, word):
         response = current_game.player_guess(word.upper(), team)
         await ctx.send(response)
         if current_game.is_game_over() is not None:
+            await send_image(ctx, None)
             await ctx.send("Game Over! " + current_game.is_game_over() +
                            ' wins! Type: "!codenames" to start a new game!')
             await clear_roles(ctx)
@@ -187,6 +198,7 @@ async def guess(ctx, word):
             return
         # if guess was correct
         if response == 'Correct!':
+            await send_image(ctx, None)
             # check if game should end
             if int(current_game.get_guesses()) == -2:
                 await ctx.send(
@@ -205,14 +217,17 @@ async def guess(ctx, word):
             if current_game.get_guesses() == 0:
                 current_game.swap_turn()
                 await spymaster_words(ctx, current_game.get_turn())
+                await send_image(ctx, None)
         # if guess was wrong
         elif 'Assassin' not in response:
             if team == 'Red Team':
                 await ctx.send("Now Blue Spymaster's turn.")
                 await spymaster_words(ctx, current_game.get_turn())
+                await send_image(ctx, None)
             elif team == 'Blue Team':
                 await ctx.send("Now Red Spymaster's turn.")
                 await spymaster_words(ctx, current_game.get_turn())
+                await send_image(ctx, None)
         # if assassin
         else:
             await clear_roles(ctx)
@@ -253,8 +268,9 @@ async def join(ctx, *args):
         for user in current_game.get_players():
             response += user.display_name + '\n'
         await ctx.send(response)
-        await ctx.send("Please add " +
-                       str(len(current_game.get_players())+3) + " roles.")
+
+        # check how many roles remaining
+        await roles_remain(ctx)
 
     # codenames check
     elif await test_current_game(ctx, Codenames):
@@ -333,11 +349,12 @@ async def remove_role(ctx, color, role):
 # give clue
 @ bot.command(name='clue')
 @ commands.has_any_role('Blue Spymaster', 'Red Spymaster')
-async def clue(ctx, word, number):
+async def clue(ctx, clue, number):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
         return
 
+    # make sure non-neg clue
     if int(number) < 0:
         await ctx.send("Number must be non-negative.")
         return
@@ -364,15 +381,15 @@ async def clue(ctx, word, number):
         current_game.set_guesses(-3)
     else:
         current_game.set_guesses(int(number) + 1)
-    current_game.set_clue(word)
+    current_game.set_clue(clue)
     if current_game.get_guesses() == -2:
-        response = "Your words are not related to " + word +\
+        response = "Your words are not related to " + clue +\
             ". You have infinite guesses remaining!"
     elif current_game.get_guesses() == -3:
-        response = "Clue is " + word +\
+        response = "Clue is " + clue +\
             ". You have infinite guesses remaining!"
     else:
-        response = "Clue is " + word + ". " +\
+        response = "Clue is " + clue + ". " +\
             str(current_game.get_guesses()) + " guesses remaining."
     await ctx.send(response)
 
@@ -403,6 +420,7 @@ async def pass_turn(ctx):
         await spymaster_words(ctx, current_game.get_turn())
         current_game.set_guesses(0)
         await ctx.send(team + " has passed their turn.")
+        await send_image(ctx, None)
     else:
         await ctx.send("Not your turn.")
 

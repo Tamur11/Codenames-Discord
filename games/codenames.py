@@ -4,7 +4,7 @@ from random import randrange, randint, shuffle
 
 from PIL import Image, ImageDraw, ImageFont
 
-from game import Game
+from games.game import Game
 
 from data.words import default_data
 
@@ -14,7 +14,10 @@ class Team:
     color: str  # 'Red' or 'Blue'
     words: list = field(default_factory=list)  # this teams words
     guessed: list = field(default_factory=list)  # this teams guessed words
+    clues: list = field(default_factory=list)  # the clues given to this team
+    score: int = 0  # this teams score
     players: list = field(default_factory=list)  # the players on this team
+    perm_words: list = field(default_factory=list)  # perm list of words
 
 
 class Codenames(Game):
@@ -51,12 +54,14 @@ class Codenames(Game):
 
         # allocate red, blue, assassin, and bystanders
         for _ in repeat(None, num_red):
-            self.red_team.words.append(
-                use_words.pop())
+            to_add = use_words.pop()
+            self.red_team.words.append(to_add)
+            self.red_team.perm_words.append(to_add)
 
         for _ in repeat(None, num_blue):
-            self.blue_team.words.append(
-                use_words.pop())
+            to_add = use_words.pop()
+            self.blue_team.words.append(to_add)
+            self.blue_team.perm_words.append(to_add)
 
         self.assassin = use_words.pop()
         self.bystander_words = use_words  # 7 words left
@@ -81,7 +86,6 @@ class Codenames(Game):
 
         # check if guess is assassin
         if word in self.assassin:
-            # CALL DESTRUCTOR AND DO END GAME THINGS
             return ("Assassin! " + team +
                     ' lost! Type: "!codenames" to start a new game!')
 
@@ -168,9 +172,9 @@ class Codenames(Game):
                 # partial image for guessers
                 if spymaster_color is None:
                     if current_word in self.guessed:
-                        if current_word in self.red_team.words:
+                        if current_word in self.red_team.perm_words:
                             color = (242, 96, 80)
-                        elif current_word in self.blue_team.words:
+                        elif current_word in self.blue_team.perm_words:
                             color = (133, 204, 255)
                         elif current_word in self.bystander_words:
                             color = (209, 195, 67)

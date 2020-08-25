@@ -1,10 +1,11 @@
-from game import Game
+from games.game import Game
 from dataclasses import dataclass
 
 
 @dataclass
 class Player:
-    role: list = str  # player role
+    name: str  # player name
+    role: str  # player role
 
 
 class Werewolf(Game):
@@ -24,3 +25,8 @@ class Werewolf(Game):
 
     def get_players(self):
         return self.players
+
+    def assign_roles(self):
+        roles = self.role_list
+        self.players[:] = [Player(x, roles.pop()) if x is not None
+                           else x for x in self.players]
