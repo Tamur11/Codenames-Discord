@@ -7,8 +7,8 @@ from discord.utils import get, find
 from dotenv import load_dotenv
 
 from game import Game
-from codenames import Codenames
-from werewolf import Werewolf
+from games.codenames import Codenames
+from games.werewolf import Werewolf
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
