@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from itertools import repeat
 from random import randrange, randint, shuffle
-
 from PIL import Image, ImageDraw, ImageFont
 
 from games.game import Game
-
 from data.words import default_data
+
+import copy
 
 
 @dataclass
@@ -27,6 +27,8 @@ class Codenames(Game):
         self.guessed = []  # list of words guessed
         self.guesses_remaining = 0
         self.clue = ''  # current clue
+        self.last_board = None
+        self.last_clue = None
 
         # select 25 random words to populate board
         use_words = []  # temporary list of words being used
@@ -65,6 +67,7 @@ class Codenames(Game):
 
         self.assassin = use_words.pop()
         self.bystander_words = use_words  # 7 words left
+        self.perm_bystander = copy.copy(use_words)
 
         shuffle(self.all_words)
 
@@ -92,6 +95,7 @@ class Codenames(Game):
         # check if guess is bystander
         if word in self.bystander_words and word not in self.guessed:
             self.guessed.append(word)
+            self.bystander_words.remove(word)
             self.swap_turn()
             return "That was a Bystander!"
 
@@ -151,6 +155,22 @@ class Codenames(Game):
     def set_clue(self, clue):
         self.clue = clue
 
+    # get last board
+    def get_last_board(self):
+        return self.last_board
+
+    # set last board
+    def set_last_board(self, last_board):
+        self.last_board = last_board
+
+    # get last clue
+    def get_last_clue(self):
+        return self.last_clue
+
+    # set last clue
+    def set_last_clue(self, last_clue):
+        self.last_clue = last_clue
+
     def add_player(self, name, team):
         self.players.append(name)
         if team == 'Blue Team':
@@ -176,7 +196,7 @@ class Codenames(Game):
                             color = (242, 96, 80)
                         elif current_word in self.blue_team.perm_words:
                             color = (133, 204, 255)
-                        elif current_word in self.bystander_words:
+                        elif current_word in self.perm_bystander:
                             color = (209, 195, 67)
                         elif current_word in self.assassin:
                             color = (161, 158, 137)
@@ -186,16 +206,23 @@ class Codenames(Game):
                 # full image for spymasters
                 else:
                     if current_word in self.red_team.words:
-                        color = (242, 96, 80)
+                        color = (242, 185, 177)
                     elif current_word in self.blue_team.words:
-                        color = (133, 204, 255)
+                        color = (184, 225, 255)
                     elif current_word in self.bystander_words:
-                        color = (209, 195, 67)
+                        color = (209, 203, 151)
                     elif current_word in self.assassin:
                         color = (161, 158, 137)
-                    # highlight guessed words green
-                    if current_word in self.guessed:
-                        color = (134, 249, 107)
+                    # makes guessed words lighter
+                    if current_word in self.guessed and\
+                            current_word in self.red_team.perm_words:
+                        color = (242, 96, 80)
+                    if current_word in self.guessed and\
+                            current_word in self.blue_team.perm_words:
+                        color = (82, 183, 255)
+                    if current_word in self.guessed and\
+                            current_word in self.perm_bystander:
+                        color = (209, 195, 67)
 
                 startX = 320 * j
                 startY = 200 * i

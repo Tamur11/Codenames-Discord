@@ -22,9 +22,23 @@ async def test_current_game(ctx, intended_game) -> bool:
     if current_game.__class__ == intended_game:
         return True
     else:
-        await ctx.send(
-            'Command not availible during ' + intended_game.__name__ + '.')
         return False
+
+
+# error handler
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, discord.ext.commands.errors.CommandNotFound):
+        await ctx.send("Not a valid command!")
+        return
+    elif isinstance(
+            error, discord.ext.commands.errors.MissingRequiredArgument):
+        await ctx.send("Command missing an argument!")
+        return
+    elif isinstance(error, discord.ext.commands.errors.CommandError):
+        await ctx.send("Error with command!")
+    else:
+        return
 
 
 # create a werewolf game
@@ -91,31 +105,6 @@ async def add_role(ctx, role):
         await roles_remain(ctx)
 
 
-# start a werewolf game
-@bot.command(name='start')
-async def start(ctx):
-    # check if at least 3 players
-    # if len(current_game.get_players()) < 3:
-    #     current_players = "Current players:\n"
-    #     for user in current_game.get_players():
-    #         current_players += user.display_name + '\n'
-    #     await ctx.send(
-    #         "Must have at least 3 players to begin. Current players are:\n" +
-    #         current_players)
-    #     return
-
-    # check if werewolf has been added
-    if 'werewolf' not in current_game.get_role_list():
-        await ctx.send("Must have at least one werewolf to begin.")
-        return
-
-    # check how many roles remaining
-    await roles_remain(ctx)
-
-    # run night logic
-    await night_logic(ctx)
-
-
 # roles to add/remove before can start
 async def roles_remain(ctx):
     diff = len(current_game.get_role_list())-3 -\
@@ -144,11 +133,60 @@ async def codenames(ctx):
     global current_game
     current_game = Codenames()
 
-    # update spymaster
-    await spymaster_words(ctx, 'Blue Team')
-    await spymaster_words(ctx, 'Red Team')
+    await ctx.send('Codenames game started! Add both spymasters to "!start"')
 
-    await send_image(ctx, None)
+
+# start a game
+@bot.command(name='start')
+async def start(ctx):
+    # ww start logic
+    if await test_current_game(ctx, Werewolf):
+        # check if at least 3 players
+        # if len(current_game.get_players()) < 3:
+        #     current_players = "Current players:\n"
+        #     for user in current_game.get_players():
+        #         current_players += user.display_name + '\n'
+        #     await ctx.send(
+        #         "Must have at least 3 players to begin. Current players are:\n" +
+        #         current_players)
+        #     return
+
+        # check if werewolf has been added
+        if 'werewolf' not in current_game.get_role_list():
+            await ctx.send("Must have at least one werewolf to begin.")
+            return
+
+        # check how many roles remaining
+        await roles_remain(ctx)
+
+        # run night logic
+        await night_logic(ctx)
+
+    # codenames start logic
+    elif await test_current_game(ctx, Codenames):
+        is_red_sm = find(
+            lambda r: r.name == 'Red Spymaster', ctx.message.guild.roles)
+        is_blue_sm = find(
+            lambda r: r.name == 'Blue Spymaster', ctx.message.guild.roles)
+
+        # make sure two spymasters exist
+        no_blue_sm = True
+        no_red_sm = True
+        for member in ctx.guild.members:
+            if is_blue_sm in member.roles:
+                no_blue_sm = False
+            if is_red_sm in member.roles:
+                no_red_sm = False
+        if no_blue_sm or no_red_sm:
+            await ctx.send("Requires 2 Spymasters to begin.")
+            return
+
+        # start game logic
+        await spymaster_words(ctx, 'Blue Team')
+        await spymaster_words(ctx, 'Red Team')
+
+        await send_image(ctx, None)
+        await ping_roles(ctx)
 
 
 # player guess
@@ -172,7 +210,7 @@ async def guess(ctx, word):
         if is_red_sm in member.roles:
             no_red_sm = False
     if no_blue_sm or no_red_sm:
-        await ctx.send("Requires 2 Spymasters to begin.")
+        await ctx.send("Requires 2 Spymasters to play.")
         return
 
     # determine guesser team
@@ -187,6 +225,7 @@ async def guess(ctx, word):
     if current_game.get_turn() == team and current_game.get_guesses() != 0:
         response = current_game.player_guess(word.upper(), team)
         await ctx.send(response)
+        # check if game should end
         if current_game.is_game_over() is not None:
             await send_image(ctx, None)
             await ctx.send("Game Over! " + current_game.is_game_over() +
@@ -199,35 +238,55 @@ async def guess(ctx, word):
         # if guess was correct
         if response == 'Correct!':
             await send_image(ctx, None)
-            # check if game should end
+            clue_msg = None
             if int(current_game.get_guesses()) == -2:
-                await ctx.send(
+                clue_msg = await ctx.send(
                     "Your words are not related to " +
                     current_game.get_clue() +
                     ". You have infinite guesses remaining!")
             elif int(current_game.get_guesses()) == -3:
-                await ctx.send(
+                clue_msg = await ctx.send(
                     "Clue is " + current_game.get_clue() +
                     ". You have infinite guesses remaining!")
             else:
                 current_game.set_guesses(int(current_game.get_guesses()) - 1)
-                await ctx.send("Clue is " + current_game.get_clue() + ". " +
-                               str(current_game.get_guesses()) +
-                               " guesses remaining.")
+                clue_msg = await ctx.send(
+                    "Clue is " + current_game.get_clue() + ". " +
+                    str(current_game.get_guesses()) +
+                    " guesses remaining.")
+
+            # pin logic
+            if clue_msg is not None:
+                await clue_msg.pin()
+                to_delete = await ctx.channel.history().next()
+                await to_delete.delete()
+                if current_game.get_last_clue() is not None:
+                    await current_game.get_last_clue().unpin()
+                current_game.set_last_clue(clue_msg)
+
             if current_game.get_guesses() == 0:
+                current_game.set_clue("")
+                current_game.set_guesses(0)
                 current_game.swap_turn()
                 await spymaster_words(ctx, current_game.get_turn())
                 await send_image(ctx, None)
+                await ping_roles(ctx)
         # if guess was wrong
         elif 'Assassin' not in response:
             if team == 'Red Team':
                 await ctx.send("Now Blue Spymaster's turn.")
+                current_game.set_clue("")
+                current_game.set_guesses(0)
                 await spymaster_words(ctx, current_game.get_turn())
                 await send_image(ctx, None)
+                await ping_roles(ctx)
             elif team == 'Blue Team':
                 await ctx.send("Now Red Spymaster's turn.")
+                current_game.set_clue("")
+                current_game.set_guesses(0)
                 await spymaster_words(ctx, current_game.get_turn())
                 await send_image(ctx, None)
+                await ping_roles(ctx)
         # if assassin
         else:
             await clear_roles(ctx)
@@ -274,8 +333,8 @@ async def join(ctx, *args):
 
     # codenames check
     elif await test_current_game(ctx, Codenames):
-        color = args[0]
-        role = args[1]
+        color = args[0].title()
+        role = args[1].title()
         team = color.title() + " " + role.title()
 
         is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
@@ -305,7 +364,7 @@ async def join(ctx, *args):
         # add spymaster role
         if team == 'Blue Spymaster' or team == 'Red Spymaster':
             await user.add_roles(get(user.guild.roles, name=team))
-            await send_image(user, team)
+            # await send_image(user, team)
             await ctx.send("Joined " + team + ".")
             return
 
@@ -354,6 +413,11 @@ async def clue(ctx, clue, number):
     if not await test_current_game(ctx, Codenames):
         return
 
+    # make sure only one clue sent
+    if current_game.get_clue():
+        await ctx.send("A clue has already been given.")
+        return
+
     # make sure non-neg clue
     if int(number) < 0:
         await ctx.send("Number must be non-negative.")
@@ -391,7 +455,18 @@ async def clue(ctx, clue, number):
     else:
         response = "Clue is " + clue + ". " +\
             str(current_game.get_guesses()) + " guesses remaining."
-    await ctx.send(response)
+
+    await ping_roles(ctx)
+    clue_msg = await ctx.send(response)
+
+    # pin logic
+    if clue_msg is not None:
+        await clue_msg.pin()
+        to_delete = await ctx.channel.history().next()
+        await to_delete.delete()
+        if current_game.get_last_clue() is not None:
+            await current_game.get_last_clue().unpin()
+        current_game.set_last_clue(clue_msg)
 
 
 # pass
@@ -416,11 +491,12 @@ async def pass_turn(ctx):
 
     if current_game.get_turn() == team:
         current_game.set_clue("")
+        current_game.set_guesses(0)
         current_game.swap_turn()
         await spymaster_words(ctx, current_game.get_turn())
-        current_game.set_guesses(0)
         await ctx.send(team + " has passed their turn.")
         await send_image(ctx, None)
+        await ping_roles(ctx)
     else:
         await ctx.send("Not your turn.")
 
@@ -458,7 +534,16 @@ async def send_image(target, spymaster_color):
         embed = discord.Embed(description=description, color=color)
         file = discord.File(fp=image_bin, filename='wordlist.png')
         embed.set_image(url="attachment://wordlist.png")
-        await target.send(file=file, embed=embed)
+
+        # pin logic
+        board_msg = await target.send(file=file, embed=embed)
+        if spymaster_color is None:
+            await board_msg.pin()
+            to_delete = await target.channel.history().next()
+            await to_delete.delete()
+            if current_game.get_last_board() is not None:
+                await current_game.get_last_board().unpin()
+            current_game.set_last_board(board_msg)
 
 
 # send words to spymaster
@@ -481,8 +566,30 @@ async def spymaster_words(ctx, team):
             spymaster = member
     if spymaster is not None:
         await send_image(spymaster, team)
+        await spymaster.send("You are " + str(to_check) + ".")
     else:
         return
+
+
+# ping current turn
+async def ping_roles(ctx):
+    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
+    role = None
+    # check whose turn it is
+    if current_game.get_clue() != '':
+        if current_game.get_turn() == 'Blue Team':
+            role = is_blue
+        elif current_game.get_turn() == 'Red Team':
+            role = is_red
+        else:
+            return
+    elif current_game.get_clue() == '':
+        if current_game.get_turn() == 'Blue Team':
+            role = is_blue_sm
+        elif current_game.get_turn() == 'Red Team':
+            role = is_red_sm
+
+    await ctx.send('<@&' + str(role.id) + '>')
 
 
 # function to clear roles post game

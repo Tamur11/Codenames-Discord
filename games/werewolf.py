@@ -1,5 +1,6 @@
 from games.game import Game
 from dataclasses import dataclass
+from random import shuffle
 
 
 @dataclass
@@ -27,6 +28,7 @@ class Werewolf(Game):
         return self.players
 
     def assign_roles(self):
+        shuffle(self.role_list)
         roles = self.role_list
         self.players[:] = [Player(x, roles.pop()) if x is not None
                            else x for x in self.players]
