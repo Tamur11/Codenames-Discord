@@ -524,9 +524,9 @@ async def info(ctx):
 
     is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
     # num people and names on each team
-    red_sm = None
+    red_sm = ''
     red_team = []
-    blue_sm = None
+    blue_sm = ''
     blue_team = []
     for member in ctx.guild.members:
         if is_blue in member.roles:
