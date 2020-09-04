@@ -11,7 +11,7 @@ import copy
 
 @dataclass
 class Team:
-    color: str  # 'Red' or 'Blue'
+    color: str  # 'Red Team' or 'Blue Team'
     words: list = field(default_factory=list)  # this teams words
     guessed: list = field(default_factory=list)  # this teams guessed words
     clues: list = field(default_factory=list)  # the clues given to this team
@@ -28,7 +28,7 @@ class Codenames(Game):
         self.guesses_remaining = 0
         self.clue = ''  # current clue
         self.last_board = None
-        self.last_clue = None
+        self.started = False
 
         # select 25 random words to populate board
         use_words = []  # temporary list of words being used
@@ -163,13 +163,13 @@ class Codenames(Game):
     def set_last_board(self, last_board):
         self.last_board = last_board
 
-    # get last clue
-    def get_last_clue(self):
-        return self.last_clue
+    # get has started
+    def get_started(self):
+        return self.started
 
-    # set last clue
-    def set_last_clue(self, last_clue):
-        self.last_clue = last_clue
+    # set has started
+    def set_started(self, boolean):
+        self.started = boolean
 
     def add_player(self, name, team):
         self.players.append(name)
@@ -195,7 +195,7 @@ class Codenames(Game):
                         if current_word in self.red_team.perm_words:
                             color = (242, 96, 80)
                         elif current_word in self.blue_team.perm_words:
-                            color = (133, 204, 255)
+                            color = (82, 183, 255)
                         elif current_word in self.perm_bystander:
                             color = (209, 195, 67)
                         elif current_word in self.assassin:

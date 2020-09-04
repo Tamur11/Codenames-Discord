@@ -49,9 +49,8 @@ async def werewolf(ctx):
 
     await ctx.send("One Night Ultimate Werewolf game started!")
 
+
 # werewolf add role card
-
-
 @bot.command(name='add')
 async def add_role(ctx, role):
     valid_roles = [
@@ -182,6 +181,7 @@ async def start(ctx):
             return
 
         # start game logic
+        current_game.set_started(True)
         await spymaster_words(ctx, 'Blue Team')
         await spymaster_words(ctx, 'Red Team')
 
@@ -238,31 +238,21 @@ async def guess(ctx, word):
         # if guess was correct
         if response == 'Correct!':
             await send_image(ctx, None)
-            clue_msg = None
             if int(current_game.get_guesses()) == -2:
-                clue_msg = await ctx.send(
+                await ctx.send(
                     "Your words are not related to " +
                     current_game.get_clue() +
                     ". You have infinite guesses remaining!")
             elif int(current_game.get_guesses()) == -3:
-                clue_msg = await ctx.send(
+                await ctx.send(
                     "Clue is " + current_game.get_clue() +
                     ". You have infinite guesses remaining!")
             else:
                 current_game.set_guesses(int(current_game.get_guesses()) - 1)
-                clue_msg = await ctx.send(
+                await ctx.send(
                     "Clue is " + current_game.get_clue() + ". " +
                     str(current_game.get_guesses()) +
                     " guesses remaining.")
-
-            # pin logic
-            if clue_msg is not None:
-                await clue_msg.pin()
-                to_delete = await ctx.channel.history().next()
-                await to_delete.delete()
-                if current_game.get_last_clue() is not None:
-                    await current_game.get_last_clue().unpin()
-                current_game.set_last_clue(clue_msg)
 
             if current_game.get_guesses() == 0:
                 current_game.set_clue("")
@@ -398,9 +388,16 @@ async def remove_role(ctx, color, role):
         return
 
     # remove role
-    if team == 'Blue Team' or 'Red Team':
+    if team == 'Blue Team' or team == 'Red Team':
         await user.remove_roles(get(user.guild.roles, name=team))
         await ctx.send("Left " + team + ".")
+    elif (team == 'Blue Spymaster' or team == 'Red Spymaster') and\
+            not current_game.get_started():
+        await user.remove_roles(get(user.guild.roles, name=team))
+        await ctx.send("Left " + team + ".")
+    elif team == 'Blue Spymaster' or team == 'Red Spymaster' and\
+            current_game.get_started():
+        await ctx.send("Cannot leave spymaster once game has started.")
     else:
         await ctx.send("Not a valid team.")
 
@@ -408,7 +405,7 @@ async def remove_role(ctx, color, role):
 # give clue
 @ bot.command(name='clue')
 @ commands.has_any_role('Blue Spymaster', 'Red Spymaster')
-async def clue(ctx, clue, number):
+async def clue(ctx, *args):
     # test to see if we are currently in a Codenames game
     if not await test_current_game(ctx, Codenames):
         return
@@ -417,6 +414,16 @@ async def clue(ctx, clue, number):
     if current_game.get_clue():
         await ctx.send("A clue has already been given.")
         return
+
+    # parse user input
+    clue = '"'
+    for arg in args:
+        if arg.isdigit():
+            number = arg
+            clue = clue.strip() + '"'
+            break
+        else:
+            clue += arg + ' '
 
     # make sure non-neg clue
     if int(number) < 0:
@@ -458,15 +465,9 @@ async def clue(ctx, clue, number):
 
     await ping_roles(ctx)
     clue_msg = await ctx.send(response)
-
-    # pin logic
-    if clue_msg is not None:
-        await clue_msg.pin()
-        to_delete = await ctx.channel.history().next()
-        await to_delete.delete()
-        if current_game.get_last_clue() is not None:
-            await current_game.get_last_clue().unpin()
-        current_game.set_last_clue(clue_msg)
+    await clue_msg.pin()
+    to_delete = await ctx.channel.history().next()
+    await to_delete.delete()
 
 
 # pass
@@ -501,13 +502,10 @@ async def pass_turn(ctx):
         await ctx.send("Not your turn.")
 
 
-# display which team's turn
-@ bot.command(name='turn')
+# display current turn
+@bot.command(name='turn')
 async def turn(ctx):
-    # test to see if we are currently in a Codenames game
-    if not await test_current_game(ctx, Codenames):
-        return
-
+    # turn logic
     if current_game.get_clue() != '':
         await ctx.send(current_game.get_turn() + "'s turn.")
     elif current_game.get_clue() == '':
@@ -515,6 +513,38 @@ async def turn(ctx):
             await ctx.send("Blue Spymaster's turn.")
         elif current_game.get_turn() == 'Red Team':
             await ctx.send("Red Spymaster's turn.")
+
+
+# display which team's turn
+@bot.command(name='teams')
+async def info(ctx):
+    # test to see if we are currently in a Codenames game
+    if not await test_current_game(ctx, Codenames):
+        return
+
+    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(ctx)
+    # num people and names on each team
+    red_sm = None
+    red_team = []
+    blue_sm = None
+    blue_team = []
+    for member in ctx.guild.members:
+        if is_blue in member.roles:
+            blue_team.append(member.name)
+        if is_red in member.roles:
+            red_team.append(member.name)
+        if is_blue_sm in member.roles:
+            blue_sm = member.name
+        if is_red_sm in member.roles:
+            red_sm = member.name
+
+    # return formatting
+    await ctx.send(
+        "Red team ("+str(len(red_team))+") is " + str(red_team).strip('[]') +
+        ". Red spymaster is " + red_sm + ".\n" +
+        "Blue team ("+str(len(blue_team))+") is "+str(blue_team).strip('[]') +
+        ". Blue spymaster is " + blue_sm + "."
+    )
 
 
 async def send_image(target, spymaster_color):
