@@ -1,4 +1,7 @@
 # Board-Game-Manager
+
+** DOES NOT WORK ON LASTEST VERSION OF DISCORD **
+
 Discord bot that will manage board games for you.
 
 Possible games:
