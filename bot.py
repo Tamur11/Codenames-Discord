@@ -73,10 +73,8 @@ async def start(interaction: discord.Interaction):
     await spymaster_words(interaction, 'Blue Team')
     await spymaster_words(interaction, 'Red Team')
 
-    await send_image(interaction, None)
-    await ping_roles(interaction)
-
     await interaction.followup.send("Game started!")
+    await send_image(interaction, None, await get_role_mention(interaction))
 
 
 # Player guess
@@ -118,10 +116,10 @@ async def guess(interaction: discord.Interaction, word: str):
 
         # Check if game should end
         if current_game.is_game_over() is not None:
-            await send_image(interaction, None)
-            await interaction.followup.send("Game Over! " + current_game.is_game_over() +
-                                            ' wins! Use `/codenames` to start a new game.')
+            await interaction.followup.send(f"Game Over! {current_game.is_game_over()} wins! Use `/codenames` to start a new game.")
+            await send_endgame_image(interaction)
             await clear_roles(interaction)
+            await current_game.get_last_board().unpin()
             current_game = None  # Reset game
             return
 
@@ -130,26 +128,20 @@ async def guess(interaction: discord.Interaction, word: str):
             return
 
         # If guess was correct
-        if response == 'Correct!':
+        if 'Correct!' in response:
             await send_image(interaction, None)
             if int(current_game.get_guesses()) == -2 or int(current_game.get_guesses()) == -3:
-                await interaction.followup.send(
-                    "Clue is `" + current_game.get_clue() +
-                    "`. You have infinite guesses remaining.")
+                await interaction.followup.send(f"{await get_role_mention(interaction)} Clue is `{current_game.get_clue()}`. You have infinite guesses remaining.")
             else:
                 current_game.set_guesses(int(current_game.get_guesses()) - 1)
-                await interaction.followup.send(
-                    "Clue is `" + current_game.get_clue() + "`. You have " +
-                    str(current_game.get_guesses()) +
-                    " guesses remaining.")
+                await interaction.followup.send(f"{await get_role_mention(interaction)} Clue is `{current_game.get_clue()}`. You have {current_game.get_guesses()} guesses remaining.")
 
             if current_game.get_guesses() == 0:
                 current_game.set_clue("")
                 current_game.set_guesses(0)
                 current_game.swap_turn()
                 await spymaster_words(interaction, current_game.get_turn())
-                await send_image(interaction, None)
-                await ping_roles(interaction)
+                await send_image(interaction, None, await get_role_mention(interaction))
 
         # If guess was wrong
         elif 'Assassin' not in response:
@@ -157,13 +149,13 @@ async def guess(interaction: discord.Interaction, word: str):
             current_game.set_guesses(0)
             current_game.swap_turn()
             await spymaster_words(interaction, current_game.get_turn())
-            await send_image(interaction, None)
-            await ping_roles(interaction)
-            await interaction.followup.send(f"Now {current_game.get_turn()} Spymaster's turn.")
+            await send_image(interaction, None, await get_role_mention(interaction))
 
         # If assassin
         else:
+            await send_endgame_image(interaction)
             await clear_roles(interaction)
+            await current_game.get_last_board().unpin()
             current_game = None  # Reset game
             return
     else:
@@ -180,7 +172,7 @@ async def color_tester(interaction):
 
 # Assign roles
 @bot.tree.command(name='join', description='Join a team.')
-@app_commands.describe(color='Team color', role='Player or Spymaster')
+@app_commands.describe(color='Team color', role='Spymaster or Team')
 async def join(interaction: discord.Interaction, color: str, role: str):
     user = interaction.user
     team = color.title() + " " + role.title()
@@ -212,7 +204,7 @@ async def join(interaction: discord.Interaction, color: str, role: str):
     # Add spymaster role
     if team == 'Blue Spymaster' or team == 'Red Spymaster':
         await user.add_roles(get(user.guild.roles, name=team))
-        await interaction.response.send_message("Joined " + team + ".")
+        await interaction.response.send_message(f"Joined {team}.")
         return
 
     # Add team role
@@ -220,16 +212,16 @@ async def join(interaction: discord.Interaction, color: str, role: str):
         if current_game:
             current_game.add_player(user.name, team)
         await user.add_roles(get(user.guild.roles, name=team))
-        await interaction.response.send_message("Joined " + team + ".")
+        await interaction.response.send_message(f"Joined {team}.")
         return
 
     # Catch typos
-    await interaction.response.send_message(team + " is not a valid team.")
+    await interaction.response.send_message(f"{team} is not a valid team.")
 
 
 # Leave team
 @bot.tree.command(name='leave', description='Leave a team.')
-@app_commands.describe(color='Team color', role='Player or Spymaster')
+@app_commands.describe(color='Team color', role='Spymaster or Team')
 async def leave(interaction: discord.Interaction, color: str, role: str):
     team = color.title() + " " + role.title()
     user = interaction.user
@@ -243,10 +235,10 @@ async def leave(interaction: discord.Interaction, color: str, role: str):
     # Remove role
     if team in ['Blue Team', 'Red Team']:
         await user.remove_roles(role_obj)
-        await interaction.response.send_message("Left " + team + ".")
+        await interaction.response.send_message(f"Left {team}.")
     elif team in ['Blue Spymaster', 'Red Spymaster'] and not current_game.get_started():
         await user.remove_roles(role_obj)
-        await interaction.response.send_message("Left " + team + ".")
+        await interaction.response.send_message(f"Left {team}.")
     elif team in ['Blue Spymaster', 'Red Spymaster'] and current_game.get_started():
         await interaction.response.send_message("Cannot leave Spymaster once the game has started.")
     else:
@@ -290,14 +282,11 @@ async def clue(interaction: discord.Interaction, clue: str, number: str):
         current_game.set_guesses(int(number) + 1)
     current_game.set_clue(clue + " " + number)
     if current_game.get_guesses() == -2 or current_game.get_guesses() == -3:
-        response = "Clue is `" + clue + " " + number +\
-            "`. You have infinite guesses remaining."
+        response = f"Clue is `{clue} {number}`. You have infinite guesses remaining."
     else:
-        response = "Clue is `" + clue + " " + number + "`. You have " +\
-            str(current_game.get_guesses()) + " guesses remaining."
+        response = f"Clue is `{clue} {number}`. You have {current_game.get_guesses()} guesses remaining."
 
-    await ping_roles(interaction)
-    await interaction.response.send_message(response)
+    await interaction.response.send_message(await get_role_mention(interaction) + " " + response)
 
 
 # Pass
@@ -325,9 +314,8 @@ async def pass_turn(interaction: discord.Interaction):
         current_game.set_guesses(0)
         current_game.swap_turn()
         await spymaster_words(interaction, current_game.get_turn())
-        await send_image(interaction, None)
-        await ping_roles(interaction)
-        await interaction.response.send_message(team + " has passed their turn.")
+        await interaction.response.send_message(f"{team} has passed their turn.")
+        await send_image(interaction, None, await get_role_mention(interaction))
     else:
         await interaction.response.send_message("Not your turn.")
 
@@ -340,7 +328,7 @@ async def turn(interaction: discord.Interaction):
         return
 
     if current_game.get_clue() != '':
-        await interaction.response.send_message(current_game.get_turn() + "'s turn.")
+        await interaction.response.send_message(f"{current_game.get_turn()}'s turn.")
     else:
         await interaction.response.send_message(f"{current_game.get_turn()} Spymaster's turn.")
 
@@ -348,7 +336,7 @@ async def turn(interaction: discord.Interaction):
 # Display team info
 @bot.tree.command(name='teams', description='Display team information.')
 async def teams(interaction: discord.Interaction):
-    if current_game is None or not current_game.get_started():
+    if current_game is None:
         await interaction.response.send_message("No game in progress.")
         return
 
@@ -370,14 +358,14 @@ async def teams(interaction: discord.Interaction):
 
     # Format and send the response
     await interaction.response.send_message(
-        f"Red team ({len(red_team)}): {', '.join(red_team)}.\n"
-        f"Red Spymaster: {red_sm}.\n"
-        f"Blue team ({len(blue_team)}): {', '.join(blue_team)}.\n"
-        f"Blue Spymaster: {blue_sm}."
+        f"Red team ({len(red_team)}): {', '.join(red_team)}\n"
+        f"Red Spymaster: {red_sm}\n"
+        f"Blue team ({len(blue_team)}): {', '.join(blue_team)}\n"
+        f"Blue Spymaster: {blue_sm}"
     )
 
 
-async def send_image(interaction, spymaster_color):
+async def send_image(interaction, spymaster_color, role_mention=None):
     with BytesIO() as image_bin:
         current_game.update_image_state(spymaster_color).save(image_bin, 'PNG')
         image_bin.seek(0)
@@ -385,15 +373,14 @@ async def send_image(interaction, spymaster_color):
         b_remain = str(len(current_game.remaining_words('Blue Spymaster')))
         r_remain = str(len(current_game.remaining_words('Red Spymaster')))
         # Embed logic
-        description = f"```ansi\n\u001b[34m[Blue - {b_remain} words remain]\u001b[0m```" + \
-            f"```ansi\n\u001b[31m[Red - {r_remain} words remain]\u001b[0m```"
+        description = f"```ansi\n\u001b[34m[Blue - {b_remain} words remain]\u001b[0m```" + f"```ansi\n\u001b[31m[Red - {r_remain} words remain]\u001b[0m```"
         color = discord.Colour.red() if current_game.get_turn() == 'Red Team' else discord.Colour.blue()
         embed = discord.Embed(description=description, color=color)
         file = discord.File(fp=image_bin, filename='wordlist.png')
         embed.set_image(url="attachment://wordlist.png")
 
         # Pin logic
-        board_msg = await interaction.channel.send(file=file, embed=embed)
+        board_msg = await interaction.channel.send(content=role_mention, file=file, embed=embed)
         if spymaster_color is None:
             await board_msg.pin()
             if current_game.get_last_board() is not None:
@@ -420,7 +407,7 @@ async def spymaster_words(interaction, team):
     if spymaster is not None:
         # Send image to spymaster
         await send_image_to_spymaster(spymaster, team)
-        await spymaster.send("You are " + to_check.name + ".")
+        await spymaster.send(f"You are {to_check.name}.")
     else:
         return
 
@@ -433,8 +420,15 @@ async def send_image_to_spymaster(spymaster, team):
         await spymaster.send(file=file)
 
 
-# Ping current turn
-async def ping_roles(interaction):
+async def send_endgame_image(interaction):
+    with BytesIO() as image_bin:
+        current_game.update_image_state(True).save(image_bin, 'PNG')
+        image_bin.seek(0)
+        file = discord.File(fp=image_bin, filename='wordlist.png')
+        await interaction.followup.send(file=file)
+
+
+async def get_role_mention(interaction):
     is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
     role = None
     # Determine whose turn it is
@@ -443,7 +437,7 @@ async def ping_roles(interaction):
     else:
         role = is_blue_sm if current_game.get_turn() == 'Blue Team' else is_red_sm
 
-    await interaction.channel.send(f"{role.mention}")
+    return role.mention
 
 
 # Clear roles after game ends

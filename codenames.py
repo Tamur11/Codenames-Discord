@@ -78,30 +78,29 @@ class Codenames:
 
         # Validate the guessed word
         if word not in self.all_words:
-            return word + ' is not in this game, try again.'
+            return f"`{word}` is not in this game, try again."
 
         # Check if guess is the assassin
         if word == self.assassin:
-            return ("Assassin! " + team +
-                    ' lost! Use `/codenames` to start a new game.')
+            return f"{team} guessed `{word}`. Assassin! {team} lost! Use `/codenames` to start a new game."
 
         # Check if guess is a bystander
         if word in self.bystander_words and word not in self.guessed:
             self.guessed.append(word)
             self.bystander_words.remove(word)
-            return "That was a Bystander!"
+            return f"{team} guessed `{word}`. That was a Bystander!"
 
         # Check if guess is the other team's word
         if word in other_team.words and word not in self.guessed:
             self.guessed.append(word)
             other_team.words.remove(word)
-            return "Wrong team's word!"
+            return f"{team} guessed `{word}`. Wrong team's word!"
 
         # Check if the word is correct
         if word in current_team.words and word not in self.guessed:
             self.guessed.append(word)
             current_team.words.remove(word)
-            return 'Correct!'
+            return f"{team} guessed `{word}`. Correct!"
 
         return "Word has already been guessed."
 
@@ -206,14 +205,11 @@ class Codenames:
                     elif current_word == self.assassin:
                         color = (161, 158, 137)
                     # Highlight guessed words
-                    if current_word in self.guessed and \
-                            current_word in self.red_team.perm_words:
+                    if current_word in self.guessed and current_word in self.red_team.perm_words:
                         color = (242, 96, 80)
-                    if current_word in self.guessed and \
-                            current_word in self.blue_team.perm_words:
+                    if current_word in self.guessed and current_word in self.blue_team.perm_words:
                         color = (82, 183, 255)
-                    if current_word in self.guessed and \
-                            current_word in self.perm_bystander:
+                    if current_word in self.guessed and current_word in self.perm_bystander:
                         color = (209, 195, 67)
 
                 startX = 320 * j
