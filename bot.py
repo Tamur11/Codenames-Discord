@@ -130,14 +130,23 @@ async def guess(interaction: discord.Interaction, word: str):
         # If guess was correct
         if 'Correct!' in response:
             await send_image(interaction, None)
+            clues = current_game.get_clues(team)
+            current_clue = clues[-1]
+            previous_clues = clues[:-1]
+            previous_clues_text = ", ".join(f"`{clue}`" for clue in previous_clues)
+
             if int(current_game.get_guesses()) == -2 or int(current_game.get_guesses()) == -3:
-                await interaction.followup.send(f"{await get_role_mention(interaction)} Clue is `{current_game.get_clue()}`. You have infinite guesses remaining.")
+                message = f"{await get_role_mention(interaction)} Clue is `{current_clue}`. You have infinite guesses remaining."
             else:
                 current_game.set_guesses(int(current_game.get_guesses()) - 1)
-                await interaction.followup.send(f"{await get_role_mention(interaction)} Clue is `{current_game.get_clue()}`. You have {current_game.get_guesses()} guesses remaining.")
+                message = f"{await get_role_mention(interaction)} Clue is `{current_clue}`. You have {current_game.get_guesses()} guesses remaining."
+
+            if previous_clues:
+                message += f"\nPrevious clues: {previous_clues_text}"
+
+            await interaction.followup.send(message)
 
             if current_game.get_guesses() == 0:
-                current_game.set_clue("")
                 current_game.set_guesses(0)
                 current_game.swap_turn()
                 await spymaster_words(interaction, current_game.get_turn())
@@ -145,7 +154,6 @@ async def guess(interaction: discord.Interaction, word: str):
 
         # If guess was wrong
         elif 'Assassin' not in response:
-            current_game.set_clue("")
             current_game.set_guesses(0)
             current_game.swap_turn()
             await spymaster_words(interaction, current_game.get_turn())
@@ -254,7 +262,7 @@ async def clue(interaction: discord.Interaction, clue: str, number: str):
         return
 
     # Ensure only one clue is given
-    if current_game.get_clue():
+    if current_game.is_clue_given(current_game.get_turn()):
         await interaction.response.send_message("A clue has already been given.")
         return
 
@@ -280,11 +288,21 @@ async def clue(interaction: discord.Interaction, clue: str, number: str):
         current_game.set_guesses(-2)
     else:
         current_game.set_guesses(int(number) + 1)
-    current_game.set_clue(clue + " " + number)
+
+    clue_text = f"{clue} {number}"
+    current_game.set_clue(clue_text, current_game.get_turn())
+    clues = current_game.get_clues(current_game.get_turn())
+    current_clue = clues[-1]
+    previous_clues = clues[:-1]
+    previous_clues_text = ", ".join(f"`{clue}`" for clue in previous_clues)
+
     if current_game.get_guesses() == -2 or current_game.get_guesses() == -3:
-        response = f"Clue is `{clue} {number}`. You have infinite guesses remaining."
+        response = f"Clue is `{current_clue}`. You have infinite guesses remaining."
     else:
-        response = f"Clue is `{clue} {number}`. You have {current_game.get_guesses()} guesses remaining."
+        response = f"Clue is `{current_clue}`. You have {current_game.get_guesses()} guesses remaining."
+
+    if previous_clues:
+        response += f"\nPrevious clues: {previous_clues_text}"
 
     await interaction.response.send_message(await get_role_mention(interaction) + " " + response)
 
@@ -310,7 +328,6 @@ async def pass_turn(interaction: discord.Interaction):
         return
 
     if current_game.get_turn() == team:
-        current_game.set_clue("")
         current_game.set_guesses(0)
         current_game.swap_turn()
         await spymaster_words(interaction, current_game.get_turn())
@@ -327,7 +344,7 @@ async def turn(interaction: discord.Interaction):
         await interaction.response.send_message("No game in progress.")
         return
 
-    if current_game.get_clue() != '':
+    if current_game.is_clue_given(current_game.get_turn()):
         await interaction.response.send_message(f"{current_game.get_turn()}'s turn.")
     else:
         await interaction.response.send_message(f"{current_game.get_turn()} Spymaster's turn.")
@@ -432,7 +449,7 @@ async def get_role_mention(interaction):
     is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
     role = None
     # Determine whose turn it is
-    if current_game.get_clue() != '':
+    if current_game.is_clue_given(current_game.get_turn()):
         role = is_blue if current_game.get_turn() == 'Blue Team' else is_red
     else:
         role = is_blue_sm if current_game.get_turn() == 'Blue Team' else is_red_sm

@@ -12,6 +12,7 @@ class Team:
     words: list = field(default_factory=list)  # This team's words
     guessed: list = field(default_factory=list)  # Guessed words
     clues: list = field(default_factory=list)  # Clues given
+    clue_given: bool = False  # Track if a clue has been given this turn
     score: int = 0  # Team's score
     players: list = field(default_factory=list)  # Players on this team
     perm_words: list = field(default_factory=list)  # Permanent list of words
@@ -22,7 +23,6 @@ class Codenames:
         self.word_list = default_data.copy()  # Words to choose from
         self.guessed = []  # List of guessed words
         self.guesses_remaining = 0
-        self.clue = ''  # Current clue
         self.last_board = None
         self.started = False
 
@@ -130,6 +130,9 @@ class Codenames:
             self.current_turn = 'Red Team'
         elif self.current_turn == 'Red Team':
             self.current_turn = 'Blue Team'
+        # Reset clue_given status when turn is swapped
+        self.red_team.clue_given = False
+        self.blue_team.clue_given = False
 
     # Get number of remaining guesses
     def get_guesses(self):
@@ -140,12 +143,29 @@ class Codenames:
         self.guesses_remaining = guesses_remaining
 
     # Get the current clue
-    def get_clue(self):
-        return self.clue
+    def get_clues(self, team):
+        if team == 'Red Team':
+            return self.red_team.clues
+        elif team == 'Blue Team':
+            return self.blue_team.clues
+        return []
 
     # Set the current clue
-    def set_clue(self, clue):
-        self.clue = clue
+    def set_clue(self, clue, team):
+        if team == 'Red Team':
+            self.red_team.clues.append(clue)
+            self.red_team.clue_given = True
+        elif team == 'Blue Team':
+            self.blue_team.clues.append(clue)
+            self.blue_team.clue_given = True
+
+    # Check if a clue has been given for the current turn
+    def is_clue_given(self, team):
+        if team == 'Red Team':
+            return self.red_team.clue_given
+        elif team == 'Blue Team':
+            return self.blue_team.clue_given
+        return False
 
     # Get the last board message
     def get_last_board(self):
@@ -229,4 +249,3 @@ def textsize(text, font):
     draw_temp = ImageDraw.Draw(im)
     _, _, width, height = draw_temp.textbbox((0, 0), text=text, font=font)
     return width, height
-      
