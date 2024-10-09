@@ -124,7 +124,7 @@ async def guess(interaction: discord.Interaction, word: str):
             return
 
         # Catch for typos
-        if 'try again' in response:
+        if 'try again' in response or 'already been guessed' in response:
             return
 
         # If guess was correct
