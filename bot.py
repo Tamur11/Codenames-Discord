@@ -1,4 +1,5 @@
 import os
+import random
 from io import BytesIO
 
 import discord
@@ -54,8 +55,7 @@ async def start(interaction: discord.Interaction):
         await interaction.followup.send("No game in progress. Use `/codenames` to start a new game.")
         return
 
-    is_red_sm = get(interaction.guild.roles, name='Red Spymaster')
-    is_blue_sm = get(interaction.guild.roles, name='Blue Spymaster')
+    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
 
     # Ensure two spymasters exist
     no_blue_sm = no_red_sm = True
@@ -64,10 +64,30 @@ async def start(interaction: discord.Interaction):
             no_blue_sm = False
         if is_red_sm in member.roles:
             no_red_sm = False
-    if no_blue_sm or no_red_sm:
-        await interaction.followup.send("Requires 2 Spymasters to begin.")
-        return
 
+    if no_blue_sm:
+        blue_team = [member for member in interaction.guild.members if is_blue in member.roles]
+        if len(blue_team) < 2:
+            await interaction.followup.send("Blue team needs more members to begin")
+            return
+        else:
+            sm_choice = random.choice(blue_team)
+            await sm_choice.remove_roles(get(interaction.guild.roles, name="Blue Team"))
+            await sm_choice.add_roles(get(interaction.guild.roles, name="Blue Spymaster"))
+            await interaction.response.send_message(f"Made {member.name} spymaster.")
+            
+
+    if no_red_sm:
+        red_team = [member for member in interaction.guild.members if is_red in member.roles]
+        if len(red_team) < 2:
+            await interaction.followup.send("Red team needs more members to begin")
+            return
+        else:
+            sm_choice = random.choice(red_team)
+            await sm_choice.remove_roles(get(interaction.guild.roles, name="Red Team"))
+            await sm_choice.add_roles(get(interaction.guild.roles, name="Red Spymaster"))
+            await interaction.response.send_message(f"Made {member.name} spymaster.")
+    
     # Start game logic
     current_game.set_started(True)
     await spymaster_words(interaction, 'Blue Team')
@@ -182,10 +202,23 @@ async def color_tester(interaction):
 @bot.tree.command(name='join', description='Join a team.')
 @app_commands.describe(color='Team color', role='Spymaster or Team')
 async def join(interaction: discord.Interaction, color: str, role: str):
+    
+    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
+
+    # Randomly assign if teams are equal
+    if color.lower() == "balance":
+        blue_team_count = len([member for member in interaction.guild.members if is_blue in member.roles])
+        red_team_count = len([member for member in interaction.guild.members if is_red in member.roles])
+
+        if red_team_count < blue_team_count:
+            color = "red"
+        elif red_team_count > blue_team_count:
+            color = "blue"
+        else:
+            color = random.choice(["red", "blue"])
+
     user = interaction.user
     team = color.title() + " " + role.title()
-
-    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
 
     # Ensure one spymaster per color
     if role.lower() == "spymaster":
