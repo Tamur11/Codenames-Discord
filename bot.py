@@ -1,4 +1,5 @@
 import os
+import random
 from io import BytesIO
 
 import discord
@@ -41,7 +42,7 @@ async def on_app_command_error(interaction: discord.Interaction, error):
 async def codenames(interaction: discord.Interaction):
     global current_game
     current_game = Codenames()
-    await interaction.response.send_message('Codenames game started! Add both spymasters using `/join`, then start using `/start`.')
+    await interaction.response.send_message('Codenames game started! Add both spymasters using `/join` or `/team`, then start using `/start`.')
 
 
 # Start the game
@@ -56,17 +57,38 @@ async def start(interaction: discord.Interaction):
 
     is_red_sm = get(interaction.guild.roles, name='Red Spymaster')
     is_blue_sm = get(interaction.guild.roles, name='Blue Spymaster')
+    red_team_role = get(interaction.guild.roles, name='Red Team')
+    blue_team_role = get(interaction.guild.roles, name='Blue Team')
 
-    # Ensure two spymasters exist
+    # Check for spymasters and team members
     no_blue_sm = no_red_sm = True
+    red_team_members = []
+    blue_team_members = []
+
     for member in interaction.guild.members:
         if is_blue_sm in member.roles:
             no_blue_sm = False
         if is_red_sm in member.roles:
             no_red_sm = False
-    if no_blue_sm or no_red_sm:
-        await interaction.followup.send("Requires 2 Spymasters to begin.")
+        if blue_team_role in member.roles and is_blue_sm not in member.roles:
+            blue_team_members.append(member)
+        if red_team_role in member.roles and is_red_sm not in member.roles:
+            red_team_members.append(member)
+
+    # Ensure there are enough players to promote if needed
+    if (no_blue_sm and len(blue_team_members) < 2) or (no_red_sm and len(red_team_members) < 2):
+        await interaction.followup.send("Each team requires at least 2 players to start the game.")
         return
+
+    # Promote a random team member to spymaster if needed
+    if no_blue_sm:
+        new_blue_sm = random.choice(blue_team_members)
+        await new_blue_sm.add_roles(is_blue_sm)
+        await new_blue_sm.remove_roles(blue_team_role)
+    if no_red_sm:
+        new_red_sm = random.choice(red_team_members)
+        await new_red_sm.add_roles(is_red_sm)
+        await new_red_sm.remove_roles(red_team_role)
 
     # Start game logic
     current_game.set_started(True)
@@ -179,9 +201,9 @@ async def color_tester(interaction):
 
 
 # Assign roles
-@bot.tree.command(name='join', description='Join a team.')
+@bot.tree.command(name='team', description='Join a team for a specific role.')
 @app_commands.describe(color='Team color', role='Spymaster or Team')
-async def join(interaction: discord.Interaction, color: str, role: str):
+async def team(interaction: discord.Interaction, color: str, role: str):
     user = interaction.user
     team = color.title() + " " + role.title()
 
@@ -226,6 +248,42 @@ async def join(interaction: discord.Interaction, color: str, role: str):
     # Catch typos
     await interaction.response.send_message(f"{team} is not a valid team.")
 
+@bot.tree.command(name='join', description='Join a team.')
+async def join(interaction: discord.Interaction):
+    user = interaction.user
+
+    # Check if player is already on a team
+    is_blue, is_blue_sm, is_red, is_red_sm = await color_tester(interaction)
+    if is_red in user.roles or is_blue in user.roles:
+        await interaction.response.send_message("Already on a team.")
+        return
+
+    # Check if player is spymaster
+    if is_red_sm in user.roles or is_blue_sm in user.roles:
+        await interaction.response.send_message("Already on a team.")
+        return
+
+    # Get team roles
+    blue_team_role = get(interaction.guild.roles, name='Blue Team')
+    red_team_role = get(interaction.guild.roles, name='Red Team')
+
+    # Count members in each team
+    blue_team_count = sum(1 for member in interaction.guild.members if blue_team_role in member.roles)
+    red_team_count = sum(1 for member in interaction.guild.members if red_team_role in member.roles)
+
+    # Determine which team to join
+    if blue_team_count < red_team_count:
+        chosen_team = 'Blue Team'
+    elif red_team_count < blue_team_count:
+        chosen_team = 'Red Team'
+    else:
+        chosen_team = random.choice(['Blue Team', 'Red Team'])
+
+    # Add user to the chosen team
+    await user.add_roles(get(user.guild.roles, name=chosen_team))
+    if current_game:
+        current_game.add_player(user.name, chosen_team)
+    await interaction.response.send_message(f"Joined {chosen_team}.")
 
 # Leave team
 @bot.tree.command(name='leave', description='Leave a team.')
