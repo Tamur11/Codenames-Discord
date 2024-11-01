@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 from discord.utils import get
 from dotenv import load_dotenv
+from discord import AllowedMentions
 
 from codenames import Codenames
 
@@ -16,7 +17,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 intents = discord.Intents.default()
 intents.members = True
 
-bot = commands.Bot(command_prefix='/', intents=intents)
+allowed_mentions = AllowedMentions(roles=True, users=True)
+bot = commands.Bot(command_prefix='/', intents=intents, allowed_mentions=allowed_mentions)
 current_game = None  # Holds the current game instance
 
 
