@@ -279,19 +279,43 @@ def save_current_game(game: Codenames):
         pickle.dump(game, f)
 
 
+import asyncio
+import pickle
+
+GAME_STATE_FILENAME = "game_state.pkl"
+
+async def load_current_game() -> Codenames:
+    fl = Path(GAME_STATE_FILENAME)
+    if fl.exists():
+        return await asyncio.to_thread(_load_pickle, fl)
+    return Codenames()
+
+async def save_current_game(game: Codenames):
+    fl = Path(GAME_STATE_FILENAME)
+    await asyncio.to_thread(_save_pickle, fl, game)
+
+def _load_pickle(file_path):
+    with open(file_path, mode="rb") as f:
+        return pickle.load(f)
+
+def _save_pickle(file_path, game):
+    with open(file_path, mode="wb") as f:
+        pickle.dump(game, f)
+
 class GameHandler:
     def __init__(self):
-        self.game = load_current_game()
+        self.game = None
         self._is_game_over = False
 
-    def set_game_over(self):
-        self._is_game_over = True
-    
-    def __enter__(self):
+    async def __aenter__(self):
+        self.game = await load_current_game()
         return self
-    
-    def __exit__(self):
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
         if self._is_game_over:
             os.remove(GAME_STATE_FILENAME)
         else:
-            save_current_game(self.game)
+            await save_current_game(self.game)
+
+    def set_game_over(self):
+        self._is_game_over = True
