@@ -52,55 +52,59 @@ async def codenames(interaction: discord.Interaction):
 @bot.tree.command(name='start', description='Start the game.')
 async def start(interaction: discord.Interaction):
     await interaction.response.defer()
+
+    try:
     
-    with GameHandler() as g:
-        current_game = g.game
-        if current_game is None:
-            await interaction.followup.send("No game in progress. Use `/codenames` to start a new game.")
-            return
+        with GameHandler() as g:
+            current_game = g.game
+            if current_game is None:
+                await interaction.followup.send("No game in progress. Use `/codenames` to start a new game.")
+                return
 
-        is_red_sm = get(interaction.guild.roles, name='Red Spymaster')
-        is_blue_sm = get(interaction.guild.roles, name='Blue Spymaster')
-        red_team_role = get(interaction.guild.roles, name='Red Team')
-        blue_team_role = get(interaction.guild.roles, name='Blue Team')
+            is_red_sm = get(interaction.guild.roles, name='Red Spymaster')
+            is_blue_sm = get(interaction.guild.roles, name='Blue Spymaster')
+            red_team_role = get(interaction.guild.roles, name='Red Team')
+            blue_team_role = get(interaction.guild.roles, name='Blue Team')
 
-        # Check for spymasters and team members
-        no_blue_sm = no_red_sm = True
-        red_team_members = []
-        blue_team_members = []
+            # Check for spymasters and team members
+            no_blue_sm = no_red_sm = True
+            red_team_members = []
+            blue_team_members = []
 
-        for member in interaction.guild.members:
-            if is_blue_sm in member.roles:
-                no_blue_sm = False
-            if is_red_sm in member.roles:
-                no_red_sm = False
-            if blue_team_role in member.roles and is_blue_sm not in member.roles:
-                blue_team_members.append(member)
-            if red_team_role in member.roles and is_red_sm not in member.roles:
-                red_team_members.append(member)
+            for member in interaction.guild.members:
+                if is_blue_sm in member.roles:
+                    no_blue_sm = False
+                if is_red_sm in member.roles:
+                    no_red_sm = False
+                if blue_team_role in member.roles and is_blue_sm not in member.roles:
+                    blue_team_members.append(member)
+                if red_team_role in member.roles and is_red_sm not in member.roles:
+                    red_team_members.append(member)
 
-        # Ensure there are enough players to promote if needed
-        if (no_blue_sm and len(blue_team_members) < 2) or (no_red_sm and len(red_team_members) < 2):
-            await interaction.followup.send("Each team requires at least 2 players to start the game.")
-            return
+            # Ensure there are enough players to promote if needed
+            if (no_blue_sm and len(blue_team_members) < 2) or (no_red_sm and len(red_team_members) < 2):
+                await interaction.followup.send("Each team requires at least 2 players to start the game.")
+                return
 
-        # Promote a random team member to spymaster if needed
-        if no_blue_sm:
-            new_blue_sm = random.choice(blue_team_members)
-            await new_blue_sm.add_roles(is_blue_sm)
-            await new_blue_sm.remove_roles(blue_team_role)
-        if no_red_sm:
-            new_red_sm = random.choice(red_team_members)
-            await new_red_sm.add_roles(is_red_sm)
-            await new_red_sm.remove_roles(red_team_role)
+            # Promote a random team member to spymaster if needed
+            if no_blue_sm:
+                new_blue_sm = random.choice(blue_team_members)
+                await new_blue_sm.add_roles(is_blue_sm)
+                await new_blue_sm.remove_roles(blue_team_role)
+            if no_red_sm:
+                new_red_sm = random.choice(red_team_members)
+                await new_red_sm.add_roles(is_red_sm)
+                await new_red_sm.remove_roles(red_team_role)
 
-        # Start game logic
-        current_game.set_started()
-        await spymaster_words(interaction, 'Blue Team')
-        await spymaster_words(interaction, 'Red Team')
+            # Start game logic
+            current_game.set_started()
+            await spymaster_words(interaction, 'Blue Team')
+            await spymaster_words(interaction, 'Red Team')
 
-        await interaction.followup.send("Game started!")
-        await send_image(current_game, interaction, None, await get_role_mention(current_game, interaction))
+            await interaction.followup.send("Game started!")
+            await send_image(current_game, interaction, None, await get_role_mention(current_game, interaction))
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred {e}", ephemeral=True)
 
 
 # Player guess
