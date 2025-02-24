@@ -5,6 +5,17 @@ from PIL import Image, ImageDraw, ImageFont
 import copy
 from data.words import default_data
 
+from pathlib import Path
+import pickle
+import os
+
+from enum import Enum
+
+class GameState(Enum):
+    UNINITIALIZED = 1
+    CREATED = 2
+    IN_PROGRESS = 3
+
 
 @dataclass
 class Team:
@@ -24,7 +35,8 @@ class Codenames:
         self.guessed = []  # List of guessed words
         self.guesses_remaining = 0
         self.last_board = None
-        self.started = False
+
+        self.current_state = GameState.UNINITIALIZED
 
         # Select 25 random words to populate the board
         use_words = []
@@ -177,11 +189,11 @@ class Codenames:
 
     # Check if the game has started
     def get_started(self):
-        return self.started
+        return self.state == GameState.IN_PROGRESS
 
     # Set the game as started
-    def set_started(self, boolean):
-        self.started = boolean
+    def set_started(self):
+        self.current_state = GameState.IN_PROGRESS
 
     def add_player(self, name, team):
         if team == 'Blue Team':
@@ -249,3 +261,37 @@ def textsize(text, font):
     draw_temp = ImageDraw.Draw(im)
     _, _, width, height = draw_temp.textbbox((0, 0), text=text, font=font)
     return width, height
+
+
+GAME_STATE_FILENAME = "codenames.pkl"
+
+def load_current_game() -> Codenames:
+    fl = Path(GAME_STATE_FILENAME)
+    if fl.exists():
+        with open(fl, mode = "rb") as f:
+            return pickle.load(f)
+        
+    return Codenames()
+
+def save_current_game(game: Codenames):
+    fl = Path(GAME_STATE_FILENAME)
+    with open(fl, mode="wb") as f:
+        pickle.dump(game, f)
+
+
+class GameHandler:
+    def __init__(self):
+        self.game = load_current_game()
+        self._is_game_over = False
+
+    def set_game_over(self):
+        self._is_game_over = True
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self):
+        if self._is_game_over:
+            os.remove(GAME_STATE_FILENAME)
+        else:
+            save_current_game(self.game)
