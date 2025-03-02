@@ -180,16 +180,16 @@ class Codenames:
         return False
 
     # Get the last board message
-    def get_last_board(self):
+    def get_last_board(self) -> int:
         return self.last_board
 
     # Set the last board message
-    def set_last_board(self, last_board):
+    def set_last_board(self, last_board: int):
         self.last_board = last_board
 
     # Check if the game has started
     def get_started(self):
-        return self.state == GameState.IN_PROGRESS
+        return self.current_state == GameState.IN_PROGRESS
 
     # Set the game as started
     def set_started(self):
@@ -263,59 +263,41 @@ def textsize(text, font):
     return width, height
 
 
-GAME_STATE_FILENAME = "codenames.pkl"
-
-def load_current_game() -> Codenames:
-    fl = Path(GAME_STATE_FILENAME)
-    if fl.exists():
-        with open(fl, mode = "rb") as f:
-            return pickle.load(f)
-        
-    return Codenames()
-
-def save_current_game(game: Codenames):
-    fl = Path(GAME_STATE_FILENAME)
-    with open(fl, mode="wb") as f:
-        pickle.dump(game, f)
-
-
-import asyncio
 import pickle
 
-GAME_STATE_FILENAME = "game_state.pkl"
+GAME_STATE_FILENAME = Path("game_state.pkl")
 
-async def load_current_game() -> Codenames:
-    fl = Path(GAME_STATE_FILENAME)
+def load_current_game(fl: Path) -> Codenames:
     if fl.exists():
-        return await asyncio.to_thread(_load_pickle, fl)
+        return _load_pickle(fl)
     return Codenames()
 
-async def save_current_game(game: Codenames):
-    fl = Path(GAME_STATE_FILENAME)
-    await asyncio.to_thread(_save_pickle, fl, game)
+def save_current_game(fl: Path, game: Codenames):
+    _save_pickle(fl, game)
 
-def _load_pickle(file_path):
+def _load_pickle(file_path: Path):
     with open(file_path, mode="rb") as f:
         return pickle.load(f)
 
-def _save_pickle(file_path, game):
+def _save_pickle(file_path: Path, game):
     with open(file_path, mode="wb") as f:
         pickle.dump(game, f)
 
 class GameHandler:
-    def __init__(self):
+    def __init__(self, data_path: Path):
         self.game = None
         self._is_game_over = False
+        self.data_path = data_path / GAME_STATE_FILENAME
 
-    async def __aenter__(self):
-        self.game = await load_current_game()
+    def __enter__(self):
+        self.game = load_current_game(self.data_path)
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         if self._is_game_over:
-            os.remove(GAME_STATE_FILENAME)
+            os.remove(self.data_path)
         else:
-            await save_current_game(self.game)
+            save_current_game(self.data_path, self.game)
 
     def set_game_over(self):
         self._is_game_over = True
