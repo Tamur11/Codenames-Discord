@@ -214,7 +214,7 @@ async def guess(interaction: discord.Interaction, word: str):
                 g.set_game_over() # Reset game
                 return
         else:
-            await interaction.followup.send_message("Not your team's turn.")
+            await interaction.followup.send("Not your team's turn.")
 
 
 
